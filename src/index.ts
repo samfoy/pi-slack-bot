@@ -2,6 +2,7 @@ import { config as loadDotenv } from "dotenv";
 loadDotenv();
 
 import { loadConfig } from "./config.js";
+import { createApp } from "./slack.js";
 
 const config = loadConfig();
 
@@ -22,7 +23,13 @@ console.log({
   attachPort: config.attachPort,
 });
 
-process.on("SIGINT", () => {
+const app = createApp(config);
+
+await app.start();
+console.log("Bot running");
+
+process.on("SIGINT", async () => {
   console.log("\nShutting down...");
+  await app.stop();
   process.exit(0);
 });
