@@ -1,0 +1,27 @@
+{
+  "name": "pi-slack-bot",
+  "version": "0.1.0",
+  "description": "Slack bot exposing pi as a conversational coding agent",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node --import tsx/esm src/index.ts",
+    "test": "node --import tsx/esm --test src/**/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@mariozechner/pi-coding-agent": "^0.55.4",
+    "@slack/bolt": "^4.6.0",
+    "dotenv": "^16.4.7",
+    "slackify-markdown": "^5.0.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.13",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}
