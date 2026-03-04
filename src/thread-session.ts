@@ -3,6 +3,8 @@ import { createAgentSession, createCodingTools, SessionManager as PiSessionManag
 import type { AgentSession, AgentSessionEvent, AgentSessionEventListener } from "@mariozechner/pi-coding-agent";
 import type { WebClient } from "@slack/web-api";
 import type { Config, ThinkingLevel } from "./config.js";
+import { StreamingUpdater } from "./streaming-updater.js";
+import type { StreamingState } from "./streaming-updater.js";
 
 export interface ThreadSessionCreateParams {
   threadTs: string;
@@ -21,6 +23,7 @@ export class ThreadSession {
 
   private _agentSession: AgentSession;
   private _client: WebClient;
+  private _updater: StreamingUpdater;
   private _tasks: Array<() => Promise<void>> = [];
   private _processing = false;
 
@@ -30,12 +33,14 @@ export class ThreadSession {
     cwd: string,
     client: WebClient,
     agentSession: AgentSession,
+    updater: StreamingUpdater,
   ) {
     this.threadTs = threadTs;
     this.channelId = channelId;
     this.cwd = cwd;
     this._client = client;
     this._agentSession = agentSession;
+    this._updater = updater;
     this.lastActivity = new Date();
   }
 
@@ -49,12 +54,15 @@ export class ThreadSession {
       tools: createCodingTools(params.cwd),
     });
 
+    const updater = new StreamingUpdater(params.client, params.config.streamThrottleMs);
+
     return new ThreadSession(
       params.threadTs,
       params.channelId,
       params.cwd,
       params.client,
       session,
+      updater,
     );
   }
 
@@ -78,24 +86,22 @@ export class ThreadSession {
   }
 
   async prompt(text: string): Promise<void> {
-    let accumulated = "";
+    const state = await this._updater.begin(this.channelId, this.threadTs);
+
     const unsub = this._agentSession.subscribe((event) => {
       if (
         event.type === "message_update" &&
         event.assistantMessageEvent.type === "text_delta"
       ) {
-        accumulated += event.assistantMessageEvent.delta;
+        this._updater.appendText(state, event.assistantMessageEvent.delta);
       }
     });
+
     try {
       await this._agentSession.prompt(text);
-      if (accumulated) {
-        await this._client.chat.postMessage({
-          channel: this.channelId,
-          thread_ts: this.threadTs,
-          text: accumulated,
-        });
-      }
+      await this._updater.finalize(state);
+    } catch (err) {
+      await this._updater.error(state, err instanceof Error ? err : new Error(String(err)));
     } finally {
       unsub();
     }

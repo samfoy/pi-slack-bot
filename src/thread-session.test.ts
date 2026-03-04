@@ -17,12 +17,31 @@ function makeMockAgentSession() {
   };
 }
 
-function makeSession(agentSession = makeMockAgentSession()) {
+function makeMockUpdater() {
+  return {
+    begin: mock.fn(async () => ({
+      channelId: "C1",
+      threadTs: "ts1",
+      currentMessageTs: "msg-1",
+      rawMarkdown: "",
+      toolLines: [],
+      postedMessageTs: [],
+      timer: null,
+      retryCount: 0,
+    })),
+    appendText: mock.fn(() => {}),
+    finalize: mock.fn(async () => {}),
+    error: mock.fn(async () => {}),
+  };
+}
+
+function makeSession(agentSession = makeMockAgentSession(), updater = makeMockUpdater()) {
   const client = { chat: { postMessage: mock.fn(async () => ({ ts: "1" })) } } as any;
   return {
-    session: new ThreadSession("ts1", "C1", "/tmp", client, agentSession as any),
+    session: new ThreadSession("ts1", "C1", "/tmp", client, agentSession as any, updater as any),
     client,
     agentSession,
+    updater,
   };
 }
 
