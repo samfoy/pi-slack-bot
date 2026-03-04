@@ -9,7 +9,7 @@ A Slack bot that exposes [pi](https://github.com/mariozechner/pi-coding-agent) a
 - **Project picker** — fuzzy-matches project names or shows buttons to pick a working directory
 - **Interactive file picker** — browse and select files via Slack buttons when the agent needs user input
 - **Commands** — `!model`, `!thinking`, `!cwd`, `!cancel`, `!new`, `!sessions`, and more
-- **Ralph loops** — run multi-agent [Ralph](https://github.com/samfoy/ralph) presets via `!ralph` with an interactive preset picker (requires the Ralph extension installed separately)
+- **Ralph loops** — run multi-agent [Ralph](https://github.com/samfoy/pi-ralph) presets via `!ralph` with an interactive preset picker (requires the Ralph extension installed separately)
 - **Prompt templates** — run file-based prompt templates via `!prompt` with a picker UI
 - **Attach server** — external processes can connect via WebSocket and stream to Slack threads
 - **Session management** — configurable limits, idle timeout, automatic cleanup
