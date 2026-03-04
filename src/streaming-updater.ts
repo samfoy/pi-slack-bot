@@ -1,5 +1,5 @@
 import type { WebClient } from "@slack/web-api";
-import { markdownToMrkdwn, splitMrkdwn, formatToolStart, formatToolLog, type ToolCallRecord } from "./formatter.js";
+import { markdownToMrkdwn, splitMrkdwn, formatToolStart, formatToolLog, formatToolCompleted, formatToolSummaryLine, type ToolCallRecord } from "./formatter.js";
 
 export interface StreamingState {
   channelId: string;
@@ -9,6 +9,7 @@ export interface StreamingState {
   rawMarkdown: string;
   toolLines: string[];
   toolRecords: ToolCallRecord[];
+  completedToolLines: string[];
   completedCount: number;
   failedCount: number;
   postedMessageTs: string[];
@@ -48,6 +49,7 @@ export class StreamingUpdater {
       rawMarkdown: "",
       toolLines: [],
       toolRecords: [],
+      completedToolLines: [],
       completedCount: 0,
       failedCount: 0,
       postedMessageTs: [],
@@ -75,6 +77,7 @@ export class StreamingUpdater {
     if (record) {
       record.endTime = Date.now();
       record.isError = isError;
+      state.completedToolLines.push(formatToolCompleted(record));
     }
 
     // Remove the in-progress line and bump the counter
@@ -184,22 +187,30 @@ export class StreamingUpdater {
   private async _flush(state: StreamingState, partial: boolean): Promise<void> {
     const body = state.rawMarkdown.trim();
 
-    // Build tool status block: during streaming show active tools inline;
-    // on finalize (partial=false), omit — the snippet will have the details.
+    // Build tool status block: during streaming show recent completed + active tools;
+    // on finalize (partial=false), show a one-line summary.
     let toolBlock = "";
     if (partial) {
       const parts: string[] = [];
-      const total = state.completedCount + state.failedCount;
-      if (total > 0) {
-        const summary = state.failedCount > 0
-          ? `> ✅ ${total} tools ran (${state.failedCount} failed)`
-          : `> ✅ ${total} tools ran`;
-        parts.push(summary);
+
+      // Show last 5 completed tools with descriptions
+      const maxVisible = 5;
+      const completed = state.completedToolLines;
+      if (completed.length > maxVisible) {
+        parts.push(`> _…${completed.length - maxVisible} earlier tools_`);
       }
+      parts.push(...completed.slice(-maxVisible));
+
+      // Show active (in-progress) tools
       if (state.toolLines.length > 0) {
         parts.push(...state.toolLines);
       }
       toolBlock = parts.join("\n");
+    } else {
+      // Final flush: one-line summary inline (detailed log goes in the file)
+      if (state.toolRecords.length > 0) {
+        toolBlock = formatToolSummaryLine(state.toolRecords);
+      }
     }
 
     const combined = toolBlock ? `${body}\n\n${toolBlock}` : body;

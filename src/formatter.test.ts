@@ -234,8 +234,8 @@ describe("formatToolLog", () => {
       { toolName: "read", args: { path: "/foo.ts" }, startTime: 1000, endTime: 1200, isError: false },
     ];
     const log = formatToolLog(records);
-    assert.ok(log.includes("read"), "should include tool name");
-    assert.ok(log.includes("/foo.ts"), "should include args");
+    assert.ok(log.includes("Read"), "should include tool description");
+    assert.ok(log.includes("foo.ts"), "should include file name");
     assert.ok(log.includes("✓"), "should include success mark");
     assert.ok(log.includes("0.2s"), "should include duration");
     assert.ok(log.includes("1 tools ran"), "should include summary");
@@ -259,7 +259,7 @@ describe("formatToolLog", () => {
       { toolName: "read", args: { path: "/x.ts" }, startTime: 1000 },
     ];
     const log = formatToolLog(records);
-    assert.ok(log.includes("read"), "should still include tool name");
+    assert.ok(log.includes("Read"), "should still include tool description");
     assert.ok(log.includes("<0.1s"), "should show minimal duration");
   });
 

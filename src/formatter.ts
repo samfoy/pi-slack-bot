@@ -207,9 +207,9 @@ export function formatToolLog(records: ToolCallRecord[]): string {
     totalDuration += duration;
     if (r.isError) failCount++;
 
-    const argStr = formatToolArgs(r.toolName, r.args);
+    const desc = describeToolCall(r.toolName, r.args);
     const durStr = duration >= 0.1 ? `${duration.toFixed(1)}s` : "<0.1s";
-    lines.push(`${num}. ${icon} ${r.toolName}(${argStr})  ${durStr}`);
+    lines.push(`${num}. ${icon} ${desc}  ${durStr}`);
   }
 
   lines.push("───────────────────────────────────────────────────────");
@@ -266,4 +266,109 @@ function formatGenericArgs(obj: Record<string, unknown>): string {
 
 function truncateStr(s: string, max: number): string {
   return s.length > max ? s.slice(0, max - 3) + "..." : s;
+}
+
+/**
+ * Shorten a file path for display — last 2 components.
+ */
+export function shortPath(fullPath: string): string {
+  const parts = fullPath.split("/").filter(Boolean);
+  if (parts.length <= 2) return fullPath;
+  return parts.slice(-2).join("/");
+}
+
+/**
+ * Human-readable one-liner describing a tool call.
+ * Used for inline streaming display and the tool log.
+ */
+export function describeToolCall(toolName: string, args: unknown, opts?: { mrkdwn?: boolean }): string {
+  const bt = opts?.mrkdwn ? "`" : "";
+  if (!args || typeof args !== "object") return `${bt}${toolName}${bt}`;
+  const obj = args as Record<string, unknown>;
+
+  switch (toolName) {
+    case "read": {
+      const p = shortPath(String(obj.path ?? ""));
+      return `Read ${bt}${p}${bt}`;
+    }
+    case "write": {
+      const p = shortPath(String(obj.path ?? ""));
+      return `Wrote ${bt}${p}${bt}`;
+    }
+    case "edit": {
+      const p = shortPath(String(obj.path ?? ""));
+      return `Edited ${bt}${p}${bt}`;
+    }
+    case "bash": {
+      const cmd = String(obj.command ?? "").split("\n")[0];
+      return `Ran ${bt}${truncateStr(cmd, 50)}${bt}`;
+    }
+    case "web_search": {
+      const q = String(obj.query ?? obj.queries ?? "");
+      return `Searched "${truncateStr(q, 40)}"`;
+    }
+    case "fetch_content": {
+      const u = String(obj.url ?? obj.urls ?? "");
+      return `Fetched ${bt}${truncateStr(u, 50)}${bt}`;
+    }
+    case "file_picker":
+      return "File picker";
+    case "share_file": {
+      const p = shortPath(String(obj.path ?? ""));
+      return `Shared ${bt}${p}${bt}`;
+    }
+    default: {
+      const argStr = formatToolArgs(toolName, args);
+      return `${bt}${toolName}${bt}(${argStr})`;
+    }
+  }
+}
+
+/**
+ * Format a completed tool record for inline Slack display.
+ * → "> ✓ Read `formatter.ts`" or "> ✗ Ran `npm test` _(3.1s)_"
+ */
+export function formatToolCompleted(record: ToolCallRecord): string {
+  const icon = record.isError ? "✗" : "✓";
+  const desc = describeToolCall(record.toolName, record.args, { mrkdwn: true });
+  const duration = record.endTime ? record.endTime - record.startTime : 0;
+  const durStr = duration >= 1000 ? ` _(${(duration / 1000).toFixed(1)}s)_` : "";
+  return `> ${icon} ${desc}${durStr}`;
+}
+
+/**
+ * One-line summary of tool activity for the final message.
+ * → "> 📋 8 tool calls (3.2s): read ×3, edit ×3, command ×2"
+ */
+export function formatToolSummaryLine(records: ToolCallRecord[]): string {
+  if (records.length === 0) return "";
+
+  const counts: Record<string, number> = {};
+  for (const r of records) {
+    const label = toolActionLabel(r.toolName);
+    counts[label] = (counts[label] ?? 0) + 1;
+  }
+
+  const parts = Object.entries(counts).map(([label, count]) =>
+    count > 1 ? `${label} ×${count}` : label,
+  );
+
+  const totalMs = records.reduce((sum, r) => sum + (r.endTime ? r.endTime - r.startTime : 0), 0);
+  const timeStr = totalMs >= 1000 ? ` (${(totalMs / 1000).toFixed(1)}s)` : "";
+
+  return `> 📋 ${records.length} tool calls${timeStr}: ${parts.join(", ")}`;
+}
+
+function toolActionLabel(toolName: string): string {
+  switch (toolName) {
+    case "read": return "read";
+    case "write": return "write";
+    case "edit": return "edit";
+    case "bash": return "command";
+    case "web_search": return "search";
+    case "fetch_content": return "fetch";
+    case "file_picker": return "file picker";
+    case "share_file": return "share";
+    default: return toolName;
+  }
 }

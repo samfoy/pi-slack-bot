@@ -182,9 +182,8 @@ describe("StreamingUpdater", () => {
     await new Promise((r) => realSetTimeout(r, 10));
 
     const text2 = client.chat.update.mock.calls[1].arguments[0].text;
-    assert.ok(text2.includes("✅"), "should contain success summary");
+    assert.ok(text2.includes("✓"), "should contain completed tool mark");
     assert.ok(!text2.includes("🔧"), "wrench should be gone");
-    assert.ok(!text2.includes("read_file"), "individual tool name should be collapsed into summary");
   });
 
   it("tool records are tracked with timing", async () => {
@@ -223,8 +222,8 @@ describe("StreamingUpdater", () => {
     assert.equal(uploadCall.thread_ts, "ts1");
     assert.equal(uploadCall.filename, "tool-activity.txt");
     assert.ok(uploadCall.title.includes("1 tool call"));
-    assert.ok(uploadCall.content.includes("read"));
-    assert.ok(uploadCall.content.includes("/a.ts"));
+    assert.ok(uploadCall.content.includes("Read"), "should include tool description");
+    assert.ok(uploadCall.content.includes("a.ts"), "should include file name");
   });
 
   it("finalize does not upload snippet when no tools were used", async () => {
@@ -238,7 +237,7 @@ describe("StreamingUpdater", () => {
     assert.equal(client.files.uploadV2.mock.callCount(), 0);
   });
 
-  it("finalize removes tool status from final message text", async () => {
+  it("finalize includes tool summary in final message text", async () => {
     const client = makeClient();
     const updater = new StreamingUpdater(client, 3000);
     const state = await updater.begin("C1", "ts1");
@@ -254,9 +253,10 @@ describe("StreamingUpdater", () => {
     // Get the final chat.update call (last one)
     const updateCalls = client.chat.update.mock.calls;
     const finalUpdate = updateCalls[updateCalls.length - 1].arguments[0];
-    assert.ok(!finalUpdate.text.includes("✅"), "final message should not have tool summary");
     assert.ok(!finalUpdate.text.includes("🔧"), "final message should not have tool wrench");
     assert.ok(finalUpdate.text.includes("Result text"), "final message should have response text");
+    assert.ok(finalUpdate.text.includes("📋"), "final message should have tool summary line");
+    assert.ok(finalUpdate.text.includes("1 tool call"), "summary should mention tool count");
   });
 
   it("snippet upload failure does not break finalize", async () => {
@@ -319,7 +319,7 @@ describe("StreamingUpdater", () => {
     await new Promise((r) => realSetTimeout(r, 10));
     assert.equal(client.chat.update.mock.callCount(), 2);
     const text = client.chat.update.mock.calls[1].arguments[0].text;
-    assert.ok(text.includes("failed"), "should mention failed tools");
+    assert.ok(text.includes("✗"), "should show failed tool mark");
     assert.ok(!text.includes("🔧"), "wrench should be gone");
   });
 
