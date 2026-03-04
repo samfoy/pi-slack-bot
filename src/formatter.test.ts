@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { markdownToMrkdwn, splitMrkdwn, formatToolStart, formatToolEnd } from "./formatter.js";
+import { markdownToMrkdwn, splitMrkdwn, formatToolStart, formatToolEnd, formatToolLog, formatToolArgs, type ToolCallRecord } from "./formatter.js";
 
 describe("markdownToMrkdwn", () => {
   it("converts bold", () => {
@@ -122,5 +122,103 @@ describe("formatToolEnd", () => {
 
   it("formats error", () => {
     assert.equal(formatToolEnd("read", true), "> ❌ `read`");
+  });
+});
+
+describe("formatToolArgs", () => {
+  it("shows path for read tool", () => {
+    assert.equal(formatToolArgs("read", { path: "/src/foo.ts" }), "/src/foo.ts");
+  });
+
+  it("shows path for write tool", () => {
+    assert.equal(formatToolArgs("write", { path: "/src/bar.ts" }), "/src/bar.ts");
+  });
+
+  it("shows path for edit tool", () => {
+    assert.equal(formatToolArgs("edit", { path: "/src/baz.ts" }), "/src/baz.ts");
+  });
+
+  it("shows command for bash tool", () => {
+    assert.equal(formatToolArgs("bash", { command: "npm test" }), "npm test");
+  });
+
+  it("shows query for web_search", () => {
+    assert.equal(formatToolArgs("web_search", { query: "how to test" }), "how to test");
+  });
+
+  it("shows url for fetch_content", () => {
+    assert.equal(formatToolArgs("fetch_content", { url: "https://example.com" }), "https://example.com");
+  });
+
+  it("truncates long args", () => {
+    const result = formatToolArgs("bash", { command: "a".repeat(100) });
+    assert.ok(result.length <= 60, `got length ${result.length}`);
+    assert.ok(result.endsWith("..."));
+  });
+
+  it("handles generic tool with multiple args", () => {
+    const result = formatToolArgs("custom_tool", { a: "one", b: "two", c: "three" });
+    assert.ok(result.includes("one"));
+    assert.ok(result.includes("two"));
+    assert.ok(result.includes("three"));
+  });
+
+  it("handles null/undefined args", () => {
+    assert.equal(formatToolArgs("read", null), "");
+    assert.equal(formatToolArgs("read", undefined), "");
+  });
+
+  it("handles empty object", () => {
+    assert.equal(formatToolArgs("custom", {}), "");
+  });
+});
+
+describe("formatToolLog", () => {
+  it("returns empty string for no records", () => {
+    assert.equal(formatToolLog([]), "");
+  });
+
+  it("formats a single successful tool call", () => {
+    const records: ToolCallRecord[] = [
+      { toolName: "read", args: { path: "/foo.ts" }, startTime: 1000, endTime: 1200, isError: false },
+    ];
+    const log = formatToolLog(records);
+    assert.ok(log.includes("read"), "should include tool name");
+    assert.ok(log.includes("/foo.ts"), "should include args");
+    assert.ok(log.includes("✓"), "should include success mark");
+    assert.ok(log.includes("0.2s"), "should include duration");
+    assert.ok(log.includes("1 tools ran"), "should include summary");
+  });
+
+  it("formats multiple tool calls with failures", () => {
+    const records: ToolCallRecord[] = [
+      { toolName: "read", args: { path: "/a.ts" }, startTime: 1000, endTime: 1100, isError: false },
+      { toolName: "bash", args: { command: "npm test" }, startTime: 1100, endTime: 4200, isError: true },
+      { toolName: "edit", args: { path: "/b.ts" }, startTime: 4200, endTime: 4300, isError: false },
+    ];
+    const log = formatToolLog(records);
+    assert.ok(log.includes("1 failed"), "should mention failures");
+    assert.ok(log.includes("✗"), "should include failure mark");
+    assert.ok(log.includes("3 tools ran"), "should include total count");
+    assert.ok(log.includes("npm test"), "should include bash command");
+  });
+
+  it("formats records without end time", () => {
+    const records: ToolCallRecord[] = [
+      { toolName: "read", args: { path: "/x.ts" }, startTime: 1000 },
+    ];
+    const log = formatToolLog(records);
+    assert.ok(log.includes("read"), "should still include tool name");
+    assert.ok(log.includes("<0.1s"), "should show minimal duration");
+  });
+
+  it("includes header and footer separators", () => {
+    const records: ToolCallRecord[] = [
+      { toolName: "read", args: {}, startTime: 1000, endTime: 1500, isError: false },
+    ];
+    const log = formatToolLog(records);
+    const lines = log.split("\n");
+    assert.ok(lines[0].includes("───"), "should have header separator");
+    assert.ok(lines[lines.length - 2].includes("───"), "should have footer separator");
   });
 });

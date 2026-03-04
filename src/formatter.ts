@@ -76,11 +76,11 @@ function lastSafeSplit(text: string, sep: string): number {
 }
 
 /**
- * Format a tool execution start line.
+ * Format a tool execution start line for inline streaming display.
  * → "> 🔧 `tool_name`(arg1, arg2)"
  */
 export function formatToolStart(toolName: string, args: unknown): string {
-  const argStr = formatArgs(args);
+  const argStr = formatToolArgs(toolName, args);
   return `> 🔧 \`${toolName}\`(${argStr})`;
 }
 
@@ -93,18 +93,93 @@ export function formatToolEnd(toolName: string, isError: boolean): string {
   return `> ${icon} \`${toolName}\``;
 }
 
-function formatArgs(args: unknown): string {
-  if (args === null || args === undefined) return "";
-  if (typeof args !== "object") return String(args);
+/**
+ * A recorded tool call for the activity log.
+ */
+export interface ToolCallRecord {
+  toolName: string;
+  args: unknown;
+  startTime: number;
+  endTime?: number;
+  isError?: boolean;
+}
 
-  const entries = Object.entries(args as Record<string, unknown>);
+/**
+ * Format a tool activity log from recorded tool calls.
+ * Produces a clean text summary suitable for a Slack file snippet.
+ */
+export function formatToolLog(records: ToolCallRecord[]): string {
+  if (records.length === 0) return "";
+
+  const lines: string[] = [];
+  lines.push("─── Tool Activity ─────────────────────────────────────");
+
+  let totalDuration = 0;
+  let failCount = 0;
+
+  for (let i = 0; i < records.length; i++) {
+    const r = records[i];
+    const num = String(i + 1).padStart(2, " ");
+    const icon = r.isError ? "✗" : "✓";
+    const duration = r.endTime ? (r.endTime - r.startTime) / 1000 : 0;
+    totalDuration += duration;
+    if (r.isError) failCount++;
+
+    const argStr = formatToolArgs(r.toolName, r.args);
+    const durStr = duration >= 0.1 ? `${duration.toFixed(1)}s` : "<0.1s";
+    lines.push(`${num}. ${icon} ${r.toolName}(${argStr})  ${durStr}`);
+  }
+
+  lines.push("───────────────────────────────────────────────────────");
+  const failStr = failCount > 0 ? ` (${failCount} failed)` : "";
+  lines.push(`${records.length} tools ran${failStr} in ${totalDuration.toFixed(1)}s`);
+
+  return lines.join("\n");
+}
+
+/**
+ * Format tool arguments with tool-specific intelligence.
+ * Shows the most relevant arg(s) per tool type.
+ */
+export function formatToolArgs(toolName: string, args: unknown): string {
+  if (args === null || args === undefined) return "";
+  if (typeof args !== "object") return truncateStr(String(args), 60);
+
+  const obj = args as Record<string, unknown>;
+
+  // Tool-specific formatting: show the most relevant argument
+  switch (toolName) {
+    case "read":
+    case "write":
+      return truncateStr(String(obj.path ?? ""), 60);
+    case "edit":
+      return truncateStr(String(obj.path ?? ""), 60);
+    case "bash":
+      return truncateStr(String(obj.command ?? ""), 60);
+    case "web_search":
+      return truncateStr(String(obj.query ?? obj.queries ?? ""), 60);
+    case "fetch_content":
+      return truncateStr(String(obj.url ?? obj.urls ?? ""), 60);
+    case "file_picker":
+      return truncateStr(String(obj.startDir ?? obj.message ?? ""), 60);
+    default:
+      return formatGenericArgs(obj);
+  }
+}
+
+function formatGenericArgs(obj: Record<string, unknown>): string {
+  const entries = Object.entries(obj);
   if (entries.length === 0) return "";
 
   return entries
     .slice(0, 3)
     .map(([, v]) => {
       const s = typeof v === "string" ? v : JSON.stringify(v);
-      return s.length > 40 ? s.slice(0, 37) + "..." : s;
+      return truncateStr(s, 40);
     })
     .join(", ");
+}
+
+function truncateStr(s: string, max: number): string {
+  return s.length > max ? s.slice(0, max - 3) + "..." : s;
 }

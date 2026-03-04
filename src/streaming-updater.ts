@@ -1,5 +1,5 @@
 import type { WebClient } from "@slack/web-api";
-import { markdownToMrkdwn, splitMrkdwn, formatToolStart } from "./formatter.js";
+import { markdownToMrkdwn, splitMrkdwn, formatToolStart, formatToolLog, type ToolCallRecord } from "./formatter.js";
 
 export interface StreamingState {
   channelId: string;
@@ -8,6 +8,7 @@ export interface StreamingState {
   currentMessageTs: string;
   rawMarkdown: string;
   toolLines: string[];
+  toolRecords: ToolCallRecord[];
   completedCount: number;
   failedCount: number;
   postedMessageTs: string[];
@@ -46,6 +47,7 @@ export class StreamingUpdater {
       currentMessageTs: res.ts!,
       rawMarkdown: "",
       toolLines: [],
+      toolRecords: [],
       completedCount: 0,
       failedCount: 0,
       postedMessageTs: [],
@@ -61,10 +63,20 @@ export class StreamingUpdater {
 
   appendToolStart(state: StreamingState, toolName: string, args: unknown): void {
     state.toolLines.push(formatToolStart(toolName, args));
+    state.toolRecords.push({ toolName, args, startTime: Date.now() });
     this._immediateFlush(state);
   }
 
   appendToolEnd(state: StreamingState, toolName: string, isError: boolean): void {
+    // Update the matching record with end time and status
+    const record = [...state.toolRecords].reverse().find(
+      (r) => r.toolName === toolName && r.endTime === undefined,
+    );
+    if (record) {
+      record.endTime = Date.now();
+      record.isError = isError;
+    }
+
     // Remove the in-progress line and bump the counter
     const idx = state.toolLines.findIndex((l) => l.includes(`\`${toolName}\``) && l.includes("🔧"));
     if (idx !== -1) {
@@ -87,6 +99,11 @@ export class StreamingUpdater {
   async finalize(state: StreamingState): Promise<void> {
     this._cancelTimer(state);
     await this._flush(state, false);
+
+    // Upload tool activity log as a collapsible snippet
+    if (state.toolRecords.length > 0) {
+      await this._uploadToolLog(state);
+    }
 
     await this._client.reactions.remove({
       channel: state.channelId,
@@ -143,23 +160,48 @@ export class StreamingUpdater {
     }
   }
 
+  /**
+   * Upload tool activity log as a collapsible Slack file snippet.
+   */
+  private async _uploadToolLog(state: StreamingState): Promise<void> {
+    const logContent = formatToolLog(state.toolRecords);
+    if (!logContent) return;
+
+    try {
+      await this._client.files.uploadV2({
+        channel_id: state.channelId,
+        thread_ts: state.threadTs,
+        content: logContent,
+        filename: "tool-activity.txt",
+        title: `🔧 ${state.toolRecords.length} tool calls`,
+      });
+    } catch (err) {
+      console.error("[StreamingUpdater] Failed to upload tool log:", err);
+      // Non-fatal: the response text is already posted
+    }
+  }
+
   private async _flush(state: StreamingState, partial: boolean): Promise<void> {
     const body = state.rawMarkdown.trim();
 
-    // Build tool status block: summary of completed + active lines
-    const parts: string[] = [];
-    const total = state.completedCount + state.failedCount;
-    if (total > 0) {
-      const summary = state.failedCount > 0
-        ? `> ✅ ${total} tools ran (${state.failedCount} failed)`
-        : `> ✅ ${total} tools ran`;
-      parts.push(summary);
-    }
-    if (state.toolLines.length > 0) {
-      parts.push(...state.toolLines);
+    // Build tool status block: during streaming show active tools inline;
+    // on finalize (partial=false), omit — the snippet will have the details.
+    let toolBlock = "";
+    if (partial) {
+      const parts: string[] = [];
+      const total = state.completedCount + state.failedCount;
+      if (total > 0) {
+        const summary = state.failedCount > 0
+          ? `> ✅ ${total} tools ran (${state.failedCount} failed)`
+          : `> ✅ ${total} tools ran`;
+        parts.push(summary);
+      }
+      if (state.toolLines.length > 0) {
+        parts.push(...state.toolLines);
+      }
+      toolBlock = parts.join("\n");
     }
 
-    const toolBlock = parts.join("\n");
     const combined = toolBlock ? `${body}\n\n${toolBlock}` : body;
     if (!combined) return;
 

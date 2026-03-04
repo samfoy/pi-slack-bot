@@ -13,6 +13,9 @@ function makeClient() {
       add: mock.fn(async () => ({})),
       remove: mock.fn(async () => ({})),
     },
+    files: {
+      uploadV2: mock.fn(async () => ({})),
+    },
   } as any;
 }
 
@@ -182,6 +185,98 @@ describe("StreamingUpdater", () => {
     assert.ok(text2.includes("✅"), "should contain success summary");
     assert.ok(!text2.includes("🔧"), "wrench should be gone");
     assert.ok(!text2.includes("read_file"), "individual tool name should be collapsed into summary");
+  });
+
+  it("tool records are tracked with timing", async () => {
+    const client = makeClient();
+    const updater = new StreamingUpdater(client, 3000);
+    const state = await updater.begin("C1", "ts1");
+
+    updater.appendToolStart(state, "read", { path: "/foo.ts" });
+    assert.equal(state.toolRecords.length, 1);
+    assert.equal(state.toolRecords[0].toolName, "read");
+    assert.ok(state.toolRecords[0].startTime > 0);
+    assert.equal(state.toolRecords[0].endTime, undefined);
+
+    updater.appendToolEnd(state, "read", false);
+    assert.ok(state.toolRecords[0].endTime !== undefined);
+    assert.equal(state.toolRecords[0].isError, false);
+  });
+
+  it("finalize uploads tool log as file snippet when tools were used", async () => {
+    const client = makeClient();
+    const updater = new StreamingUpdater(client, 3000);
+    const state = await updater.begin("C1", "ts1");
+
+    updater.appendText(state, "Done");
+    updater.appendToolStart(state, "read", { path: "/a.ts" });
+    await new Promise((r) => realSetTimeout(r, 10));
+    updater.appendToolEnd(state, "read", false);
+    await new Promise((r) => realSetTimeout(r, 10));
+
+    await updater.finalize(state);
+
+    // Should upload a file snippet
+    assert.equal(client.files.uploadV2.mock.callCount(), 1);
+    const uploadCall = client.files.uploadV2.mock.calls[0].arguments[0];
+    assert.equal(uploadCall.channel_id, "C1");
+    assert.equal(uploadCall.thread_ts, "ts1");
+    assert.equal(uploadCall.filename, "tool-activity.txt");
+    assert.ok(uploadCall.title.includes("1 tool call"));
+    assert.ok(uploadCall.content.includes("read"));
+    assert.ok(uploadCall.content.includes("/a.ts"));
+  });
+
+  it("finalize does not upload snippet when no tools were used", async () => {
+    const client = makeClient();
+    const updater = new StreamingUpdater(client, 3000);
+    const state = await updater.begin("C1", "ts1");
+
+    updater.appendText(state, "Just text, no tools");
+    await updater.finalize(state);
+
+    assert.equal(client.files.uploadV2.mock.callCount(), 0);
+  });
+
+  it("finalize removes tool status from final message text", async () => {
+    const client = makeClient();
+    const updater = new StreamingUpdater(client, 3000);
+    const state = await updater.begin("C1", "ts1");
+
+    updater.appendText(state, "Result text");
+    updater.appendToolStart(state, "bash", { command: "ls" });
+    await new Promise((r) => realSetTimeout(r, 10));
+    updater.appendToolEnd(state, "bash", false);
+    await new Promise((r) => realSetTimeout(r, 10));
+
+    await updater.finalize(state);
+
+    // Get the final chat.update call (last one)
+    const updateCalls = client.chat.update.mock.calls;
+    const finalUpdate = updateCalls[updateCalls.length - 1].arguments[0];
+    assert.ok(!finalUpdate.text.includes("✅"), "final message should not have tool summary");
+    assert.ok(!finalUpdate.text.includes("🔧"), "final message should not have tool wrench");
+    assert.ok(finalUpdate.text.includes("Result text"), "final message should have response text");
+  });
+
+  it("snippet upload failure does not break finalize", async () => {
+    const client = makeClient();
+    client.files.uploadV2 = mock.fn(async () => { throw new Error("upload failed"); });
+    const updater = new StreamingUpdater(client, 3000);
+    const state = await updater.begin("C1", "ts1");
+
+    updater.appendText(state, "Done");
+    updater.appendToolStart(state, "read", { path: "/x.ts" });
+    await new Promise((r) => realSetTimeout(r, 10));
+    updater.appendToolEnd(state, "read", false);
+    await new Promise((r) => realSetTimeout(r, 10));
+
+    // Should not throw
+    await updater.finalize(state);
+
+    // Reactions should still be updated
+    assert.equal(client.reactions.remove.mock.callCount(), 1);
+    assert.equal(client.reactions.add.mock.callCount(), 2);
   });
 
   it("tool start triggers immediate flush bypassing throttle timer", async () => {
