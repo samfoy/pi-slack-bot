@@ -40,6 +40,7 @@ const handlers: Record<string, CommandHandler> = {
       "`!cwd <path>` — Change working directory",
       "`!reload` — Reload extensions and prompt templates",
       "`!ralph [preset] [prompt]` — Start a Ralph loop (shows preset picker if no args)",
+      "`!plan <idea>` — Start a PDD planning session",
       "`!prompt [name]` — Run a prompt template (shows picker if no args)",
       "",
       "Any other `!command` is forwarded to pi as `/command` (extensions & prompt templates).",
@@ -175,6 +176,20 @@ const handlers: Record<string, CommandHandler> = {
     } else {
       // No args — show preset picker buttons
       await postRalphPicker(ctx.client, ctx.channel, ctx.threadTs, ctx.session);
+    }
+  },
+
+  async plan(ctx, args) {
+    if (!ctx.session) {
+      await reply(ctx, "No active session. Send a message first to start one.");
+      return;
+    }
+    const trimmed = args.trim();
+    if (trimmed) {
+      // Forward directly: !plan build a rate limiter → /plan build a rate limiter
+      ctx.session.enqueue(() => ctx.session!.prompt(`/plan ${trimmed}`));
+    } else {
+      await reply(ctx, "Usage: `!plan <idea>` — e.g. `!plan build a rate limiter for our API`\n\nThis starts a PDD (Prompt-Driven Development) planning session that transforms your rough idea into a detailed design with an implementation plan.");
     }
   },
 

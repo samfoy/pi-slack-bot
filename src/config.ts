@@ -76,7 +76,7 @@ export function loadConfig(): Config {
     streamThrottleMs: optionalInt("STREAM_THROTTLE_MS", 3000),
     slackMsgLimit: optionalInt("SLACK_MSG_LIMIT", 3000),
 
-    workspaceDirs: optional("WORKSPACE_DIRS", "~/workplace")
+    workspaceDirs: optional("WORKSPACE_DIRS", "~/projects")
       .split(",")
       .map((d) => expandHome(d.trim()))
       .filter(Boolean),

@@ -4,7 +4,7 @@
   "description": "Slack bot exposing pi as a conversational coding agent",
   "type": "module",
   "engines": {
-    "node": ">=22"
+    "node": ">=20"
   },
   "scripts": {
     "start": "node --import tsx/esm src/index.ts",

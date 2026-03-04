@@ -17,7 +17,7 @@ export interface Project {
 /**
  * projects.json schema:
  * {
- *   "scanDirs": ["~/workplace"],       // dirs to scan one level deep (like WORKSPACE_DIRS)
+ *   "scanDirs": ["~/projects"],        // dirs to scan one level deep (like WORKSPACE_DIRS)
  *   "pin": ["~/scratch/pi-slack-bot"],  // always included, even if not under scanDirs
  *   "exclude": ["CR-*"],               // glob-style basename patterns to hide
  *   "labels": { "Rosie": "🌹 Rosie", "R2": "🤖 R2" }  // friendly button labels
