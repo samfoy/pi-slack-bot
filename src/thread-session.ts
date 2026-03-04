@@ -68,6 +68,11 @@ export class ThreadSession {
    */
   private _turnCompletePromise: Promise<void> | null = null;
   private _turnCompleteResolve: (() => void) | null = null;
+  /**
+   * When true, a ralph loop is running in the background.
+   * The persistent subscriber skips streaming to Slack but still resolves turn promises.
+   */
+  private _ralphBackgroundActive = false;
 
   static async create(params: ThreadSessionCreateParams): Promise<ThreadSession> {
     // Store sessions in pi's native directory structure so `pi /resume` finds them.
@@ -119,6 +124,17 @@ export class ThreadSession {
       input: async () => undefined,
       notify: (message: string, type?: string) => {
         console.log(`[Extension notify ${type ?? "info"}] ${message}`);
+        // Detect ralph-related notifications and post to Slack.
+        // When ralph background loop is active, forward all extension notifications.
+        const isRalphMsg = message.includes("Ralph loop") || message.includes("ralph loop");
+        if (isRalphMsg && (message.includes("ended:") || message.includes("complete"))) {
+          ts._ralphBackgroundActive = false;
+        }
+        if (isRalphMsg || ts._ralphBackgroundActive) {
+          ts._postToThread(`🎩 ${message}`).catch((err) => {
+            console.error(`[ThreadSession ${params.threadTs}] Failed to post ralph notification:`, err);
+          });
+        }
       },
       onTerminalInput: () => () => {},
       setStatus: () => {},
@@ -212,6 +228,11 @@ export class ThreadSession {
       if (event.type === "agent_start") {
         stateReady = false;
         pendingEvents = [];
+
+        // If ralph loop is running in background, skip Slack streaming
+        // but still track turn lifecycle for promise resolution.
+        if (this._ralphBackgroundActive) return;
+
         // A new agent turn is starting — create streaming state
         this._updater.begin(this.channelId, this.threadTs).then((state) => {
           this._activeStreamState = state;
@@ -241,6 +262,9 @@ export class ThreadSession {
         }
         return;
       }
+
+      // If ralph background mode, skip streaming events
+      if (this._ralphBackgroundActive) return;
 
       // If state isn't ready yet, buffer the event
       if (!stateReady) {
@@ -273,6 +297,14 @@ export class ThreadSession {
     // so only pi commands (pdd, ralph, review, etc.) arrive at this point.
     const piText = text.replace(/^!/, "/");
 
+    // Detect ralph loop commands that should run in background.
+    // /ralph <preset> <prompt> starts a loop; /ralph stop|status are instant.
+    const isRalphLoopStart = /^\/(ralph)\s+(?!stop\b|status\b|list\b|help\b)\S+/i.test(piText);
+    if (isRalphLoopStart) {
+      this._ralphBackgroundActive = true;
+      await this._postToThread("🎩 Starting Ralph loop in background...");
+    }
+
     // Create a turn-complete promise that will be resolved by the persistent subscriber
     // when agent_end fires. This ensures we wait for the full agent turn, including
     // turns triggered asynchronously by extensions (e.g., ralph loops via sendUserMessage).
@@ -291,10 +323,15 @@ export class ThreadSession {
           new Promise<void>((resolve) => setTimeout(resolve, 500)),
         ]);
       }
-      // If the agent is still streaming (ralph loop started another turn),
+
+      // If a ralph loop is running in background, don't wait for it.
+      // The loop will post its own status messages to the thread.
+      if (this._ralphBackgroundActive) {
+        return;
+      }
+
+      // If the agent is still streaming (extension triggered another turn),
       // wait for it to finish so we don't dequeue the next task prematurely.
-      // The small delay accounts for the gap between agent_end and the next
-      // sendUserMessage() call from extensions like ralph.
       while (true) {
         if (!this._agentSession.isStreaming) {
           // Give extensions a moment to trigger the next turn
@@ -326,12 +363,27 @@ export class ThreadSession {
 
   abort(): void {
     void this._agentSession.abort();
+    this._ralphBackgroundActive = false;
     // Resolve any pending turn promise so prompt() unblocks
     if (this._turnCompleteResolve) {
       this._turnCompleteResolve();
       this._turnCompleteResolve = null;
       this._turnCompletePromise = null;
     }
+  }
+
+  /** Whether a ralph loop is currently running in the background. */
+  get ralphBackgroundActive(): boolean {
+    return this._ralphBackgroundActive;
+  }
+
+  /** Post a plain text message to the Slack thread (not streamed, just a single message). */
+  private async _postToThread(text: string): Promise<void> {
+    await this._client.chat.postMessage({
+      channel: this.channelId,
+      thread_ts: this.threadTs,
+      text,
+    });
   }
 
   async dispose(): Promise<void> {

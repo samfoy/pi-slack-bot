@@ -192,9 +192,12 @@ describe("ThreadSession prompt event wiring", () => {
     // Wait for the async follow-up turn
     await new Promise((r) => setTimeout(r, 300));
 
-    // The persistent subscriber should have created streaming state and handled events
-    assert.ok(updater.begin.mock.callCount() >= 1, "begin should be called for follow-up turn");
-    assert.ok(updater.appendText.mock.callCount() >= 1, "appendText should be called for follow-up turn");
-    assert.ok(updater.finalize.mock.callCount() >= 1, "finalize should be called for follow-up turn");
+    // Ralph loop runs in background — streaming should be suppressed.
+    // The persistent subscriber skips begin/update/finalize when _ralphBackgroundActive is true.
+    assert.strictEqual(updater.begin.mock.callCount(), 0, "begin should NOT be called for background ralph turns");
+    assert.strictEqual(updater.appendText.mock.callCount(), 0, "appendText should NOT be called for background ralph turns");
+    assert.strictEqual(updater.finalize.mock.callCount(), 0, "finalize should NOT be called for background ralph turns");
+    // But the ralph background flag should be set
+    assert.ok((session as any)._ralphBackgroundActive, "ralph background mode should be active");
   });
 });
