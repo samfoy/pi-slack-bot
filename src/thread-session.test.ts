@@ -87,6 +87,34 @@ describe("ThreadSession queue", () => {
   });
 });
 
+describe("isRalphLoopStart regex", () => {
+  const regex = /^\/(ralph)\s+(?!stop\b|status\b|list\b|help\b|pause\b|resume\b|steer\b|presets\b|history\b|loops\b)\S+/i;
+
+  it("matches ralph loop start commands", () => {
+    assert.ok(regex.test("/ralph feature build X"));
+    assert.ok(regex.test("/ralph bugfix fix the thing"));
+    assert.ok(regex.test("/ralph mypreset"));
+  });
+
+  it("does not match ralph subcommands", () => {
+    for (const sub of ["stop", "status", "list", "help", "pause", "resume", "steer", "presets", "history", "loops"]) {
+      assert.ok(!regex.test(`/ralph ${sub}`), `should not match /ralph ${sub}`);
+      assert.ok(!regex.test(`/ralph ${sub} some args`), `should not match /ralph ${sub} some args`);
+    }
+  });
+
+  it("is case-insensitive", () => {
+    assert.ok(!regex.test("/ralph PAUSE"));
+    assert.ok(!regex.test("/ralph Resume"));
+    assert.ok(regex.test("/RALPH feature do stuff"));
+  });
+
+  it("does not match bare /ralph with no args", () => {
+    assert.ok(!regex.test("/ralph"));
+    assert.ok(!regex.test("/ralph "));
+  });
+});
+
 describe("ThreadSession prompt event wiring", () => {
   it("tool_execution_start calls appendToolStart on updater", async () => {
     let handler: (event: any) => void = () => {};

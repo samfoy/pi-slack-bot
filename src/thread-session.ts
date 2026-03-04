@@ -304,7 +304,7 @@ export class ThreadSession {
 
     // Detect ralph loop commands that should run in background.
     // /ralph <preset> <prompt> starts a loop; /ralph stop|status are instant.
-    const isRalphLoopStart = /^\/(ralph)\s+(?!stop\b|status\b|list\b|help\b)\S+/i.test(piText);
+    const isRalphLoopStart = /^\/(ralph)\s+(?!stop\b|status\b|list\b|help\b|pause\b|resume\b|steer\b|presets\b|history\b|loops\b)\S+/i.test(piText);
     if (isRalphLoopStart) {
       this._ralphBackgroundActive = true;
       await this._postToThread("🎩 Starting Ralph loop in background...");
