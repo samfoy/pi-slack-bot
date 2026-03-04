@@ -1,5 +1,5 @@
 import path from "path";
-import { mkdirSync } from "fs";
+import { mkdirSync, realpathSync } from "fs";
 import { createAgentSession, createCodingTools, DefaultResourceLoader, SessionManager as PiSessionManager } from "@mariozechner/pi-coding-agent";
 import type { AgentSession, AgentSessionEvent, AgentSessionEventListener, PromptTemplate } from "@mariozechner/pi-coding-agent";
 import type { WebClient } from "@slack/web-api";
@@ -75,6 +75,11 @@ export class ThreadSession {
   private _ralphBackgroundActive = false;
 
   static async create(params: ThreadSessionCreateParams): Promise<ThreadSession> {
+    // Resolve symlinks so the cwd matches what pi TUI uses (realpath).
+    // Without this, ~/workplace/Rosie stays as /home/samfp/workplace/Rosie
+    // while pi resolves it to /workplace/samfp/Rosie, causing session dir mismatches.
+    params = { ...params, cwd: realpathSync(params.cwd) };
+
     // Store sessions in pi's native directory structure so `pi /resume` finds them.
     // Encodes cwd the same way pi does: ~/.pi/agent/sessions/--<encoded-cwd>--/
     const cwdEncoded = encodeCwd(params.cwd);
