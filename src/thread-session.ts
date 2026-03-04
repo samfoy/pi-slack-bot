@@ -138,6 +138,22 @@ export class ThreadSession {
     return this._agentSession.thinkingLevel as ThinkingLevel;
   }
 
+  async setModel(modelName: string): Promise<void> {
+    const registry = this._agentSession.modelRegistry;
+    const all = registry.getAll();
+    const match = all.find(
+      (m) => m.id === modelName || m.name.toLowerCase() === modelName.toLowerCase(),
+    );
+    if (!match) {
+      throw new Error(`Unknown model: ${modelName}. Available: ${all.map((m) => m.id).join(", ")}`);
+    }
+    await this._agentSession.setModel(match);
+  }
+
+  setThinkingLevel(level: ThinkingLevel): void {
+    this._agentSession.setThinkingLevel(level);
+  }
+
   subscribe(handler: AgentSessionEventListener): () => void {
     return this._agentSession.subscribe(handler);
   }

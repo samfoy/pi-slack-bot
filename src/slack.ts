@@ -4,6 +4,7 @@ import { homedir } from "os";
 import type { Config } from "./config.js";
 import { BotSessionManager, SessionLimitError } from "./session-manager.js";
 import { parseMessage, scanProjects } from "./parser.js";
+import { parseCommand, dispatchCommand } from "./commands.js";
 
 export interface PendingCwd {
   threadTs: string;
@@ -42,6 +43,20 @@ export function createApp(config: Config): SlackApp {
     const channel = event.channel;
     const threadTs = ("thread_ts" in event ? event.thread_ts : undefined) ?? event.ts;
     const text = event.text ?? "";
+
+    // Command detection — handle !commands before cwd parsing
+    const cmd = parseCommand(text);
+    if (cmd) {
+      const session = sessionManager.get(threadTs);
+      await dispatchCommand(cmd.name, cmd.args, {
+        channel,
+        threadTs,
+        client,
+        sessionManager,
+        session,
+      });
+      return;
+    }
 
     // Thread replies skip cwd parsing — session already exists
     const isThreadReply = "thread_ts" in event && event.thread_ts !== undefined;
