@@ -209,13 +209,7 @@ export class ThreadSession {
     };
 
     this._persistentUnsub = this._agentSession.subscribe((event) => {
-      // Log all events for debugging
-      const eventType = (event as any).type;
-      if (!["message_update"].includes(eventType)) {
-        console.log(`[ThreadSession ${this.threadTs}] event: ${eventType}`);
-      }
       if (event.type === "agent_start") {
-        console.log(`[ThreadSession ${this.threadTs}] agent_start`);
         stateReady = false;
         pendingEvents = [];
         // A new agent turn is starting — create streaming state
@@ -229,7 +223,6 @@ export class ThreadSession {
       }
 
       if (event.type === "agent_end") {
-        console.log(`[ThreadSession ${this.threadTs}] agent_end`);
         // Agent turn finished — finalize the stream and resolve the turn promise
         const state = this._activeStreamState;
         this._activeStreamState = null;
@@ -288,9 +281,7 @@ export class ThreadSession {
     });
 
     try {
-      console.log(`[ThreadSession ${this.threadTs}] prompt() calling agentSession.prompt("${piText.slice(0, 80)}")`);
       await this._agentSession.prompt(piText);
-      console.log(`[ThreadSession ${this.threadTs}] prompt() returned, isStreaming=${this._agentSession.isStreaming}`);
       // For extension commands that are "handled" immediately (like /ralph),
       // prompt() returns before the agent turn starts. Wait for the first turn to
       // complete, but don't block forever if no turn was started (pure commands).
@@ -308,11 +299,7 @@ export class ThreadSession {
         if (!this._agentSession.isStreaming) {
           // Give extensions a moment to trigger the next turn
           await new Promise((r) => setTimeout(r, 200));
-          if (!this._agentSession.isStreaming) {
-            console.log(`[ThreadSession ${this.threadTs}] prompt() loop: agent idle, exiting`);
-            break;
-          }
-          console.log(`[ThreadSession ${this.threadTs}] prompt() loop: agent started new turn after grace period`);
+          if (!this._agentSession.isStreaming) break;
         }
         await new Promise<void>((resolve) => {
           this._turnCompletePromise = new Promise<void>((r) => {
