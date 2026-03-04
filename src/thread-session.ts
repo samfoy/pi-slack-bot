@@ -154,7 +154,15 @@ export class ThreadSession {
       getEditorText: () => "",
       editor: async () => undefined,
       setCustomEditor: () => {},
-      theme: { fg: (_c: string, t: string) => t, bg: (_c: string, t: string) => t },
+      theme: {
+        fg: (_c: string, t: string) => t,
+        bg: (_c: string, t: string) => t,
+        bold: (t: string) => t,
+        italic: (t: string) => t,
+        underline: (t: string) => t,
+        inverse: (t: string) => t,
+        strikethrough: (t: string) => t,
+      },
     };
     await session.bindExtensions({
       uiContext: noopUiContext as any,

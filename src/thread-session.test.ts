@@ -115,6 +115,43 @@ describe("isRalphLoopStart regex", () => {
   });
 });
 
+describe("noopUiContext theme contract", () => {
+  // The noop theme must implement all methods ralph calls on ctx.ui.theme.
+  // This mirrors the shape defined in thread-session.ts noopUiContext.theme.
+  const noopTheme = {
+    fg: (_c: string, t: string) => t,
+    bg: (_c: string, t: string) => t,
+    bold: (t: string) => t,
+    italic: (t: string) => t,
+    underline: (t: string) => t,
+    inverse: (t: string) => t,
+    strikethrough: (t: string) => t,
+  };
+
+  it("has all text formatting methods ralph uses", () => {
+    // ralph calls theme.bold(), theme.fg(), theme.bg() extensively
+    for (const method of ["fg", "bg", "bold", "italic", "underline", "inverse", "strikethrough"]) {
+      assert.equal(typeof (noopTheme as any)[method], "function", `theme.${method} must be a function`);
+    }
+  });
+
+  it("all methods pass through text unchanged", () => {
+    assert.equal(noopTheme.fg("accent", "hello"), "hello");
+    assert.equal(noopTheme.bg("selectedBg", "hello"), "hello");
+    assert.equal(noopTheme.bold("hello"), "hello");
+    assert.equal(noopTheme.italic("hello"), "hello");
+    assert.equal(noopTheme.underline("hello"), "hello");
+    assert.equal(noopTheme.inverse("hello"), "hello");
+    assert.equal(noopTheme.strikethrough("hello"), "hello");
+  });
+
+  it("supports ralph bordered() pattern: theme.bold inside theme.fg", () => {
+    // ralph does: theme.fg("accent", theme.bold("Title"))
+    const result = noopTheme.fg("accent", noopTheme.bold("Title"));
+    assert.equal(result, "Title");
+  });
+});
+
 describe("ThreadSession prompt event wiring", () => {
   it("tool_execution_start calls appendToolStart on updater", async () => {
     let handler: (event: any) => void = () => {};
