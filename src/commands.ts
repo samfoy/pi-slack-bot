@@ -6,6 +6,7 @@ import type { BotSessionManager, ThreadSessionInfo } from "./session-manager.js"
 import type { ThinkingLevel } from "./config.js";
 import { postRalphPicker, postPromptPicker } from "./command-picker.js";
 import { postProjectSessionPicker, postToTuiCommand } from "./session-picker.js";
+import { postDiffReview } from "./diff-reviewer.js";
 
 const VALID_THINKING_LEVELS: ThinkingLevel[] = ["off", "minimal", "low", "medium", "high", "xhigh"];
 
@@ -40,6 +41,7 @@ const handlers: Record<string, CommandHandler> = {
       "`!sessions` — List active sessions",
       "`!cwd <path>` — Change working directory",
       "`!reload` — Reload extensions and prompt templates",
+      "`!diff` — Show git diff of uncommitted changes",
       "`!resume` — Browse and resume a local pi TUI session",
       "`!to-tui` — Get a command to open this Slack session in your terminal",
       "`!ralph [preset] [prompt]` — Start a Ralph loop (shows preset picker if no args)",
@@ -211,6 +213,17 @@ const handlers: Record<string, CommandHandler> = {
 
   async "to-tui"(ctx) {
     await postToTuiCommand(ctx.client, ctx.channel, ctx.threadTs, ctx.session, ctx.sessionManager.sessionDir);
+  },
+
+  async diff(ctx) {
+    if (!ctx.session) {
+      await reply(ctx, "No active session.");
+      return;
+    }
+    const posted = await postDiffReview(ctx.client, ctx.channel, ctx.threadTs, ctx.session.cwd);
+    if (!posted) {
+      await reply(ctx, "No uncommitted changes found (or not a git repo).");
+    }
   },
 
   async prompt(ctx, args) {

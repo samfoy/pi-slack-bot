@@ -8,6 +8,8 @@ import { StreamingUpdater } from "./streaming-updater.js";
 import { createFilePickerTool, type FilePickerContext } from "./file-picker.js";
 import { createShareFileTool, type ShareFileContext } from "./file-sharing.js";
 import { encodeCwd } from "./session-path.js";
+import { hasFileModifications, postDiffReview } from "./diff-reviewer.js";
+import type { ToolCallRecord } from "./formatter.js";
 
 export interface ThreadSessionCreateParams {
   threadTs: string;
@@ -62,6 +64,10 @@ export class ThreadSession {
    * Managed by the persistent subscriber via agent_start / agent_end events.
    */
   private _activeStreamState: import("./streaming-updater.js").StreamingState | null = null;
+  /**
+   * Tool records for the current agent turn, used to detect file modifications.
+   */
+  private _turnToolRecords: ToolCallRecord[] = [];
   /**
    * Promise that resolves when the current agent turn finishes.
    * Used by prompt() to wait for the full turn (including extension-triggered follow-ups).
@@ -240,6 +246,7 @@ export class ThreadSession {
       if (event.type === "agent_start") {
         stateReady = false;
         pendingEvents = [];
+        this._turnToolRecords = [];
 
         // If ralph loop is running in background, skip Slack streaming
         // but still track turn lifecycle for promise resolution.
@@ -258,11 +265,21 @@ export class ThreadSession {
       if (event.type === "agent_end") {
         // Agent turn finished — finalize the stream and resolve the turn promise
         const state = this._activeStreamState;
+        const toolRecords = [...this._turnToolRecords];
         this._activeStreamState = null;
         stateReady = false;
         pendingEvents = [];
         if (state) {
-          this._updater.finalize(state).catch((err) => {
+          this._updater.finalize(state).then(async () => {
+            // Auto-post diff if files were modified
+            if (hasFileModifications(toolRecords)) {
+              try {
+                await postDiffReview(this._client, this.channelId, this.threadTs, this.cwd);
+              } catch (err) {
+                console.error(`[ThreadSession ${this.threadTs}] Failed to post diff review:`, err);
+              }
+            }
+          }).catch((err) => {
             console.error(`[ThreadSession ${this.threadTs}] Failed to finalize streaming:`, err);
           });
         }
@@ -277,6 +294,23 @@ export class ThreadSession {
 
       // If ralph background mode, skip streaming events
       if (this._ralphBackgroundActive) return;
+
+      // Track tool records for diff review (before state-ready check)
+      if (event.type === "tool_execution_start") {
+        this._turnToolRecords.push({
+          toolName: event.toolName,
+          args: event.args,
+          startTime: Date.now(),
+        });
+      } else if (event.type === "tool_execution_end") {
+        const record = [...this._turnToolRecords].reverse().find(
+          (r) => r.toolName === event.toolName && r.endTime === undefined,
+        );
+        if (record) {
+          record.endTime = Date.now();
+          record.isError = event.isError;
+        }
+      }
 
       // If state isn't ready yet, buffer the event
       if (!stateReady) {
