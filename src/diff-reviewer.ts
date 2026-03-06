@@ -100,24 +100,54 @@ export function generateDiff(cwd: string): DiffResult | null {
 
     if (!diff.trim()) return null;
 
-    // Count files and get stats
-    let stats: string;
-    try {
-      const statOut = execSync("git diff HEAD --stat", { cwd, encoding: "utf-8" });
-      const lastLine = statOut.trim().split("\n").pop() ?? "";
-      stats = lastLine.trim();
-    } catch {
-      stats = "";
-    }
+    // Compute stats from the diff content itself (not git diff --stat)
+    // so that untracked files are included in the summary.
+    const { fileCount, insertions, deletions } = computeDiffStats(diff);
 
-    const fileCount = (diff.match(/^diff --git/gm) ?? []).length
-      + (diff.match(/^diff --no-index/gm) ?? []).length;
+    const statParts: string[] = [];
+    statParts.push(`${fileCount} file${fileCount === 1 ? "" : "s"} changed`);
+    if (insertions > 0) statParts.push(`${insertions} insertion${insertions === 1 ? "" : "s"}(+)`);
+    if (deletions > 0) statParts.push(`${deletions} deletion${deletions === 1 ? "" : "s"}(-)`);
+    const stats = statParts.join(", ");
 
     return { diff, fileCount, stats };
   } catch (err) {
     console.error("[DiffReviewer] Error generating diff:", err);
     return null;
   }
+}
+
+/**
+ * Compute diff stats by parsing the unified diff content directly.
+ * This correctly counts untracked files (which `git diff HEAD --stat` misses).
+ */
+export function computeDiffStats(diff: string): {
+  fileCount: number;
+  insertions: number;
+  deletions: number;
+} {
+  const lines = diff.split("\n");
+  let fileCount = 0;
+  let insertions = 0;
+  let deletions = 0;
+  let inHunk = false;
+
+  for (const line of lines) {
+    if (line.startsWith("diff --git ") || line.startsWith("diff --no-index ")) {
+      fileCount++;
+      inHunk = false;
+    } else if (line.startsWith("@@ ")) {
+      inHunk = true;
+    } else if (inHunk) {
+      if (line.startsWith("+") && !line.startsWith("+++")) {
+        insertions++;
+      } else if (line.startsWith("-") && !line.startsWith("---")) {
+        deletions++;
+      }
+    }
+  }
+
+  return { fileCount, insertions, deletions };
 }
 
 export interface PasteResult {

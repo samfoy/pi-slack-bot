@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { extractModifiedFiles, hasFileModifications, generateDiff, createPaste } from "./diff-reviewer.js";
+import { extractModifiedFiles, hasFileModifications, generateDiff, createPaste, computeDiffStats } from "./diff-reviewer.js";
 import type { ToolCallRecord } from "./formatter.js";
 
 describe("extractModifiedFiles", () => {
@@ -69,6 +69,76 @@ describe("generateDiff", () => {
   it("returns null for non-git directory", () => {
     const result = generateDiff("/tmp");
     assert.equal(result, null);
+  });
+});
+
+describe("computeDiffStats", () => {
+  it("counts files, insertions, and deletions from tracked changes", () => {
+    const diff = `diff --git a/src/foo.ts b/src/foo.ts
+index abc123..def456 100644
+--- a/src/foo.ts
++++ b/src/foo.ts
+@@ -1,3 +1,4 @@
+ import { bar } from "./bar.js";
+ 
+-export function foo(): string {
++export function foo(): number {
++  // new comment
+`;
+    const stats = computeDiffStats(diff);
+    assert.equal(stats.fileCount, 1);
+    assert.equal(stats.insertions, 2);
+    assert.equal(stats.deletions, 1);
+  });
+
+  it("counts untracked new files (diff --no-index)", () => {
+    const diff = `diff --no-index a/dev/null b/NOTES.md
+new file mode 100644
+--- /dev/null
++++ b/NOTES.md
+@@ -0,0 +1,3 @@
++# Notes
++
++Some collaboration notes here
+`;
+    const stats = computeDiffStats(diff);
+    assert.equal(stats.fileCount, 1);
+    assert.equal(stats.insertions, 3);
+    assert.equal(stats.deletions, 0);
+  });
+
+  it("counts multiple files including both tracked and untracked", () => {
+    const diff = `diff --git a/src/foo.ts b/src/foo.ts
+--- a/src/foo.ts
++++ b/src/foo.ts
+@@ -1,2 +1,2 @@
+-old line
++new line
+diff --git a/README.md b/README.md
+--- a/README.md
++++ b/README.md
+@@ -5,3 +5,4 @@
+ existing
+-removed
++added
++extra
+diff --no-index a/dev/null b/new-file.md
+--- /dev/null
++++ b/new-file.md
+@@ -0,0 +1 @@
++brand new file
+`;
+    const stats = computeDiffStats(diff);
+    assert.equal(stats.fileCount, 3);
+    assert.equal(stats.insertions, 4);
+    assert.equal(stats.deletions, 2);
+  });
+
+  it("returns zeros for empty diff", () => {
+    const stats = computeDiffStats("");
+    assert.equal(stats.fileCount, 0);
+    assert.equal(stats.insertions, 0);
+    assert.equal(stats.deletions, 0);
   });
 });
 
