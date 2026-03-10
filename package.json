@@ -8,7 +8,7 @@
   },
   "scripts": {
     "start": "node --import tsx/esm src/index.ts",
-    "test": "find src -name '*.test.ts' | xargs node --import tsx/esm --test",
+    "test": "node --import tsx/esm --test --test-force-exit --test-concurrency=15 src/*.test.ts",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
     "audit": "npm audit --omit=dev || true",
