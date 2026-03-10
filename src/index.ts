@@ -25,7 +25,7 @@ console.log({
 const slackApp = createApp(config);
 
 await slackApp.app.start();
-console.log(`Bot running (${slackApp.knownProjects.length} projects discovered)`);
+console.log("Bot running");
 
 process.on("SIGINT", async () => {
   console.log("\nShutting down...");

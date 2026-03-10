@@ -27,9 +27,7 @@ const baseConfig: Config = {
 };
 
 // Helpers to simulate the Slack event flow without a real App instance.
-// We replicate the core logic from createApp's message handler.
 
-import { parseMessage, scanProjects } from "./parser.js";
 import { BotSessionManager, SessionLimitError } from "./session-manager.js";
 import {
   postCwdPicker,
@@ -94,67 +92,23 @@ function makeMockClient() {
   } as any;
 }
 
-describe("slack.ts cwd parsing — exact cwd", () => {
-  it("resolves exact directory path as cwd and passes rest as prompt", async () => {
-    const dir = tmpdir();
-    const { mgr, sessions } = makeManager();
-
-    // Simulate: parseMessage returns exact cwd
-    const parsed = parseMessage(`${dir} do something`, []);
-    assert.equal(parsed.cwd, dir);
-    assert.equal(parsed.prompt, "do something");
-
-    // Simulate handler logic: exact cwd branch
-    const session = await mgr.getOrCreate({
-      threadTs: "ts1",
-      channelId: "C1",
-      cwd: parsed.cwd!,
-    });
-
-    assert.equal(session.cwd, dir);
-    session.enqueue(() => session.prompt(parsed.prompt));
-    assert.equal(sessions.get("ts1")!.enqueue.mock.callCount(), 1);
-  });
-});
-
-describe("slack.ts cwd parsing — fuzzy candidates open cwd picker", () => {
-  let tmpBase: string;
-
-  beforeEach(() => {
-    tmpBase = join(tmpdir(), `slack-test-${Date.now()}`);
-    mkdirSync(join(tmpBase, "my-cool-project"), { recursive: true });
-    mkdirSync(join(tmpBase, "other-thing"), { recursive: true });
-  });
-
-  afterEach(() => {
-    rmSync(tmpBase, { recursive: true, force: true });
-  });
-
-  it("fuzzy candidates are resolved from parseMessage", () => {
-    const knownProjects = scanProjects([tmpBase]);
-    const parsed = parseMessage("cool do something", knownProjects);
-
-    assert.equal(parsed.cwd, null);
-    assert.ok(parsed.candidates.length > 0);
-    assert.ok(parsed.candidates.some((c) => c.endsWith("my-cool-project")));
-  });
-
-  it("cwd picker posts directory browser with pinned projects for fuzzy matches", async () => {
+describe("slack.ts — new thread always opens cwd picker", () => {
+  it("posts cwd picker with projects as pins", async () => {
     const client = makeMockClient();
     const onSelect = mock.fn();
-    const knownProjects = scanProjects([tmpBase]);
-    const parsed = parseMessage("cool do something", knownProjects);
+    const projects = [
+      { path: "/workplace/my-cool-project", label: "my-cool-project" },
+      { path: "/workplace/other-thing", label: "other-thing" },
+    ];
 
-    // Simulate the fuzzy match branch: matched projects become pins in the cwd picker
-    const matched = parsed.candidates.map((c) => ({ path: c, label: basename(c) }));
     await postCwdPicker({
       client,
       channel: "C1",
       threadTs: "T1",
-      prompt: parsed.prompt,
+      prompt: "do something",
       files: [],
-      projects: matched,
-      startDir: tmpBase,
+      projects,
+      startDir: tmpdir(),
       onSelect,
     });
 
@@ -162,7 +116,7 @@ describe("slack.ts cwd parsing — fuzzy candidates open cwd picker", () => {
     const msg = client.posted[0];
     assert.ok(msg.blocks.length > 0);
 
-    // Collect all action_ids from the blocks
+    // Should have pinned project buttons
     const actionIds: string[] = [];
     for (const block of msg.blocks) {
       if (block.type === "actions" && Array.isArray(block.elements)) {
@@ -171,23 +125,13 @@ describe("slack.ts cwd parsing — fuzzy candidates open cwd picker", () => {
         }
       }
     }
-
-    // Should have at least one pinned project button
     const hasPinButton = actionIds.some((id) => id.startsWith("cwd_pick_pin_"));
     assert.ok(hasPinButton, `Expected cwd_pick_pin_ in action IDs: ${actionIds.join(", ")}`);
 
-    // Clean up
     removePendingCwdPick(msg.ts);
   });
-});
 
-describe("slack.ts cwd parsing — no match fallback opens cwd picker from home", () => {
-  it("no-match branch opens cwd picker at homedir", async () => {
-    const parsed = parseMessage("zzznomatch do something", []);
-    assert.equal(parsed.cwd, null);
-    assert.deepEqual(parsed.candidates, []);
-
-    // In the new flow, the no-match branch opens the cwd picker at homedir
+  it("posts cwd picker at homedir when no startDir given", async () => {
     const client = makeMockClient();
     const onSelect = mock.fn();
 
@@ -195,7 +139,7 @@ describe("slack.ts cwd parsing — no match fallback opens cwd picker from home"
       client,
       channel: "C1",
       threadTs: "T1",
-      prompt: "zzznomatch do something",
+      prompt: "do something",
       files: [],
       projects: [],
       onSelect,
@@ -204,7 +148,7 @@ describe("slack.ts cwd parsing — no match fallback opens cwd picker from home"
     const pick = getPendingCwdPick(client.posted[0].ts);
     assert.ok(pick);
     assert.equal(pick!.currentDir, homedir());
-    assert.equal(pick!.prompt, "zzznomatch do something");
+    assert.equal(pick!.prompt, "do something");
 
     removePendingCwdPick(client.posted[0].ts);
   });
@@ -217,7 +161,6 @@ describe("slack.ts cwd picker select handler", () => {
     let selectDone: () => void;
     const selectPromise = new Promise<void>((resolve) => { selectDone = resolve; });
 
-    // Simulate: cwd picker posted, user selects a directory
     await postCwdPicker({
       client,
       channel: "C1",
@@ -244,7 +187,6 @@ describe("slack.ts cwd picker select handler", () => {
     // Wait for async onSelect to complete
     await selectPromise;
 
-    // Session should have been created with the selected cwd
     const session = sessions.get("T1");
     assert.ok(session);
     assert.equal(session!.cwd, selectedCwd);
@@ -252,14 +194,12 @@ describe("slack.ts cwd picker select handler", () => {
   });
 
   it("ignores select if no pending pick exists", async () => {
-    // Should not throw
     await handleCwdSelect("nonexistent-ts", "/some/dir");
   });
 });
 
 describe("slack.ts createApp integration", () => {
-  it("exports sessionManager and knownProjects", async () => {
-    // Verify the module shape — import createApp and check return type
+  it("exports sessionManager", async () => {
     const { createApp } = await import("./slack.js");
     assert.equal(typeof createApp, "function");
   });

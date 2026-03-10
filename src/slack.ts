@@ -1,7 +1,7 @@
 import { App } from "@slack/bolt";
 import type { Config } from "./config.js";
 import { BotSessionManager, SessionLimitError } from "./session-manager.js";
-import { parseMessage, loadProjects, projectPaths } from "./parser.js";
+import { loadProjects } from "./parser.js";
 import { parseCommand, dispatchCommand } from "./commands.js";
 import { handleFileSelect, handleFileNav, handleFilePickCancel, getPendingPick } from "./file-picker.js";
 import {
@@ -48,7 +48,6 @@ async function enrichPromptWithFiles(
 export interface SlackApp {
   app: App;
   sessionManager: BotSessionManager;
-  knownProjects: string[];
 }
 
 export function createApp(config: Config): SlackApp {
@@ -62,12 +61,10 @@ export function createApp(config: Config): SlackApp {
   // loadProjects re-reads ~/.pi-slack-bot/projects.json on every call,
   // so edits take effect without restart.
   let projects = loadProjects(config.workspaceDirs);
-  let knownProjects = projectPaths(projects);
 
   /** Refresh project list from disk. Called on every message so config changes take effect immediately. */
   function refreshProjects(): void {
     projects = loadProjects(config.workspaceDirs);
-    knownProjects = projectPaths(projects);
   }
 
   /**
@@ -156,42 +153,17 @@ export function createApp(config: Config): SlackApp {
       // Thread reply but no session — fall through to create with cwd picker
     }
 
-    const parsed = parseMessage(text, knownProjects);
-
     try {
-      if (parsed.cwd) {
-        // Exact cwd resolved
-        const session = await sessionManager.getOrCreate({
-          threadTs,
-          channelId: channel,
-          cwd: parsed.cwd,
-        });
-        const prompt = await enrichPromptWithFiles(slackFiles, parsed.prompt, session.cwd, config.slackBotToken);
-        session.enqueue(() => session.prompt(prompt));
-      } else if (parsed.candidates.length > 0) {
-        // Fuzzy matches — show matching projects as quick-pick buttons in the directory browser
-        const matched = projects.filter((p) => parsed.candidates.includes(p.path));
-        await postCwdPicker({
-          client,
-          channel,
-          threadTs,
-          prompt: parsed.prompt,
-          files: slackFiles,
-          projects: matched,
-          onSelect: onCwdSelected,
-        });
-      } else {
-        // No cwd token or no match — show directory browser starting from home
-        await postCwdPicker({
-          client,
-          channel,
-          threadTs,
-          prompt: text,
-          files: slackFiles,
-          projects,
-          onSelect: onCwdSelected,
-        });
-      }
+      // Show directory browser for the user to pick a working directory
+      await postCwdPicker({
+        client,
+        channel,
+        threadTs,
+        prompt: text,
+        files: slackFiles,
+        projects,
+        onSelect: onCwdSelected,
+      });
     } catch (err) {
       if (err instanceof SessionLimitError) {
         await client.chat.postMessage({
@@ -342,7 +314,5 @@ export function createApp(config: Config): SlackApp {
   return {
     app,
     sessionManager,
-    get knownProjects() { return knownProjects; },
-    set knownProjects(v: string[]) { knownProjects = v; },
   };
 }
