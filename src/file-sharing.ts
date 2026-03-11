@@ -14,6 +14,9 @@ import { Readable } from "stream";
 import { Type, type Static } from "@sinclair/typebox";
 import type { WebClient } from "@slack/web-api";
 import type { ToolDefinition } from "@mariozechner/pi-coding-agent";
+import { createLogger } from "./logger.js";
+
+const log = createLogger("file-sharing");
 
 /* ------------------------------------------------------------------ */
 /*  Constants                                                          */
@@ -65,13 +68,13 @@ export async function downloadSlackFiles(
 
   for (const file of files) {
     if (file.size > MAX_DOWNLOAD_BYTES) {
-      console.warn(`[file-sharing] Skipping ${file.name}: ${file.size} bytes exceeds limit`);
+      log.warn("Skipping file: exceeds size limit", { fileName: file.name, size: file.size });
       continue;
     }
 
     const url = file.urlPrivateDownload ?? file.urlPrivate;
     if (!url) {
-      console.warn(`[file-sharing] Skipping ${file.name}: no download URL`);
+      log.warn("Skipping file: no download URL", { fileName: file.name });
       continue;
     }
 
@@ -84,7 +87,7 @@ export async function downloadSlackFiles(
         size: file.size,
       });
     } catch (err) {
-      console.error(`[file-sharing] Failed to download ${file.name}:`, err);
+      log.error("Failed to download file", { fileName: file.name, error: err });
     }
   }
 

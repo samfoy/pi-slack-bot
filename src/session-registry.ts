@@ -8,6 +8,9 @@
 import fs from "fs/promises";
 import { existsSync } from "fs";
 import path from "path";
+import { createLogger } from "./logger.js";
+
+const log = createLogger("session-registry");
 
 export interface SessionEntry {
   threadTs: string;
@@ -80,7 +83,7 @@ export class SessionRegistry {
       await fs.writeFile(tmpPath, JSON.stringify(data, null, 2), "utf-8");
       await fs.rename(tmpPath, this._filePath);
     } catch (err) {
-      console.error("[SessionRegistry] Failed to save:", err);
+      log.error("Failed to save session registry", { error: err });
       // Clean up temp file on failure
       try { await fs.unlink(tmpPath); } catch { /* ignore */ }
     }

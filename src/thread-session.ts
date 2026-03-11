@@ -13,7 +13,10 @@ import { createPasteProvider, type PasteProvider } from "./paste-provider.js";
 import { createNoopUiContext } from "./noop-ui-context.js";
 import { isRalphNotification, isRalphEndNotification } from "./ralph-notifications.js";
 import { formatTokenCount, formatContextUsage, getContextWarningThreshold } from "./context-format.js";
+import { createLogger } from "./logger.js";
 import type { ToolCallRecord } from "./formatter.js";
+
+const log = createLogger("thread-session");
 
 export interface ThreadSessionCreateParams {
   threadTs: string;
@@ -151,14 +154,14 @@ export class ThreadSession {
     // This is required for extensions like ralph that load state in session_start.
     const uiContext = createNoopUiContext({
       notify: (message: string, type?: "info" | "warning" | "error") => {
-        console.log(`[Extension notify ${type ?? "info"}] ${message}`);
+        log.info("Extension notification", { type: type ?? "info", message, threadTs: params.threadTs });
         // Detect ralph-related notifications and post to Slack.
         if (isRalphNotification(message)) {
           if (isRalphEndNotification(message)) {
             ts._ralphBackgroundActive = false;
           }
           ts._postToThread(`🎩 ${message}`).catch((err) => {
-            console.error(`[ThreadSession ${params.threadTs}] Failed to post ralph notification:`, err);
+            log.error("Failed to post ralph notification", { threadTs: params.threadTs, error: err });
           });
         }
       },
@@ -166,7 +169,7 @@ export class ThreadSession {
     await session.bindExtensions({
       uiContext,
       onError: (err) => {
-        console.error(`[Extension error] ${err.extensionPath} (${err.event}): ${err.error}`, err.stack ?? "");
+        log.error("Extension error", { extensionPath: err.extensionPath, event: err.event, error: err.error, stack: err.stack ?? "" });
       },
     });
 
@@ -214,7 +217,7 @@ export class ThreadSession {
       try {
         await task();
       } catch (err) {
-        console.error(`[ThreadSession ${this.threadTs}] Task error:`, err);
+        log.error("Task error", { threadTs: this.threadTs, error: err });
       }
     }
     this._processing = false;
@@ -255,7 +258,7 @@ export class ThreadSession {
           this._activeStreamState = state;
           flushPending();
         }).catch((err) => {
-          console.error(`[ThreadSession ${this.threadTs}] Failed to begin streaming:`, err);
+          log.error("Failed to begin streaming", { threadTs: this.threadTs, error: err });
         });
         return;
       }
@@ -279,13 +282,13 @@ export class ThreadSession {
                   pasteProvider: this._pasteProvider,
                 });
               } catch (err) {
-                console.error(`[ThreadSession ${this.threadTs}] Failed to post diff review:`, err);
+                log.error("Failed to post diff review", { threadTs: this.threadTs, error: err });
               }
             }
             // Check context usage and warn if approaching limits
             this._checkContextWarning();
           }).catch((err) => {
-            console.error(`[ThreadSession ${this.threadTs}] Failed to finalize streaming:`, err);
+            log.error("Failed to finalize streaming", { threadTs: this.threadTs, error: err });
           });
         } else {
           // No streaming state (e.g. ralph background) — still check context
@@ -303,7 +306,7 @@ export class ThreadSession {
       // Auto-compaction events
       if (event.type === "auto_compaction_start") {
         this._postToThread("🗜️ Auto-compacting conversation...").catch((err) => {
-          console.error(`[ThreadSession ${this.threadTs}] Failed to post auto-compaction start:`, err);
+          log.error("Failed to post auto-compaction start", { threadTs: this.threadTs, error: err });
         });
         return;
       }
@@ -315,7 +318,7 @@ export class ThreadSession {
           const beforeStr = formatTokenCount(result.tokensBefore);
           const afterStr = after?.tokens != null ? formatTokenCount(after.tokens) : "unknown";
           this._postToThread(`🗜️ Auto-compacted: ${beforeStr} → ${afterStr} tokens`).catch((err) => {
-            console.error(`[ThreadSession ${this.threadTs}] Failed to post auto-compaction end:`, err);
+            log.error("Failed to post auto-compaction end", { threadTs: this.threadTs, error: err });
           });
           // Reset warning threshold since context was freed
           this._lastContextWarningThreshold = 0;
@@ -516,7 +519,7 @@ export class ThreadSession {
       this._postToThread(
         `⚠️ Context is ${Math.round(usage.percent)}% full (${usageStr}). Use \`!compact\` to summarize or \`!new\` for a fresh session.`,
       ).catch((err) => {
-        console.error(`[ThreadSession ${this.threadTs}] Failed to post context warning:`, err);
+        log.error("Failed to post context warning", { threadTs: this.threadTs, error: err });
       });
     }
   }

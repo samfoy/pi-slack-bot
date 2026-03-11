@@ -3,13 +3,12 @@ loadDotenv();
 
 import { loadConfig } from "./config.js";
 import { createApp } from "./slack.js";
+import { createLogger } from "./logger.js";
 
+const log = createLogger("main");
 const config = loadConfig();
 
-console.log("pi-slack-bot starting...");
-console.log({
-  slackBotToken: config.slackBotToken.slice(0, 10) + "...",
-  slackAppToken: config.slackAppToken.slice(0, 10) + "...",
+log.info("pi-slack-bot starting", {
   slackUserId: config.slackUserId,
   provider: config.provider,
   model: config.model,
@@ -25,17 +24,17 @@ console.log({
 const slackApp = createApp(config);
 
 await slackApp.app.start();
-console.log("Bot running");
+log.info("Bot running");
 
 // Restore sessions from the on-disk registry (non-blocking — failures are logged)
 slackApp.sessionManager.restoreAll().then((count) => {
-  if (count > 0) console.log(`Restored ${count} session(s) from previous run.`);
+  if (count > 0) log.info("Restored sessions from previous run", { count });
 }).catch((err) => {
-  console.error("Failed to restore sessions:", err);
+  log.error("Failed to restore sessions", { error: err });
 });
 
 process.on("SIGINT", async () => {
-  console.log("\nShutting down...");
+  log.info("Shutting down");
   await slackApp.sessionManager.disposeAll();
   await slackApp.sessionManager.flushRegistry();
   slackApp.sessionManager.disposeRegistry();

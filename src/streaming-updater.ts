@@ -1,6 +1,9 @@
 import type { WebClient } from "@slack/web-api";
 import { markdownToMrkdwn, splitMrkdwn, formatToolStart, formatToolLog, formatToolCompleted, formatToolSummaryLine, type ToolCallRecord } from "./formatter.js";
 import { retrySlackCall } from "./slack-retry.js";
+import { createLogger } from "./logger.js";
+
+const log = createLogger("streaming-updater");
 
 export interface StreamingState {
   channelId: string;
@@ -177,7 +180,7 @@ export class StreamingUpdater {
     if (state.timer !== null) return;
     state.timer = setTimeout(() => {
       state.timer = null;
-      this._doFlush(state, true).catch((err) => console.error("[StreamingUpdater] flush error:", err));
+      this._doFlush(state, true).catch((err) => log.error("Flush error", { error: err }));
     }, this._throttleMs);
   }
 
@@ -202,7 +205,7 @@ export class StreamingUpdater {
     // Schedule a coalesced flush
     state.coalesceTimer = setTimeout(() => {
       state.coalesceTimer = null;
-      this._doFlush(state, true).catch((err) => console.error("[StreamingUpdater] coalesced flush error:", err));
+      this._doFlush(state, true).catch((err) => log.error("Coalesced flush error", { error: err }));
     }, this._coalesceMs);
   }
 
@@ -234,7 +237,7 @@ export class StreamingUpdater {
       if (state.needsReflush && partial) {
         state.needsReflush = false;
         this._doFlush(state, true).catch((err) =>
-          console.error("[StreamingUpdater] re-flush error:", err),
+          log.error("Re-flush error", { error: err }),
         );
       }
     }
@@ -259,7 +262,7 @@ export class StreamingUpdater {
         "files.uploadV2 (tool log)",
       );
     } catch (err) {
-      console.error("[StreamingUpdater] Failed to upload tool log:", err);
+      log.error("Failed to upload tool log", { error: err });
       // Non-fatal: the response text is already posted
     }
   }
@@ -346,7 +349,7 @@ export class StreamingUpdater {
     } catch (err: unknown) {
       const reduced = Math.floor(limit * 0.6);
       if (this._isMsgTooLong(err) && reduced >= 100) {
-        console.warn(`[StreamingUpdater] msg_too_long at limit=${limit}, retrying at ${reduced}`);
+        log.warn("msg_too_long, retrying with reduced limit", { limit, reduced });
         return this._postChunked(state, mrkdwn, reduced);
       }
       throw err;

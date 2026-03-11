@@ -4,6 +4,9 @@
  * Detects `WebAPIRateLimitedError` from @slack/web-api and retries
  * with the server-specified `Retry-After` delay or exponential backoff.
  */
+import { createLogger } from "./logger.js";
+
+const log = createLogger("slack-retry");
 
 /** Check if an error is a Slack rate limit error. */
 export function isRateLimitError(err: unknown): err is { retryAfter: number; code: string } {
@@ -83,9 +86,7 @@ export async function retrySlackCall<T>(
       }
       delay = Math.min(delay, remaining);
 
-      console.warn(
-        `[SlackRetry] ${label} rate limited, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`,
-      );
+      log.warn("Rate limited, retrying", { label, delayMs: delay, attempt: attempt + 1, maxRetries });
 
       await sleep(delay);
       totalWaited += delay;

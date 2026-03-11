@@ -13,6 +13,9 @@ import { execSync } from "child_process";
 import type { WebClient } from "@slack/web-api";
 import type { ToolCallRecord } from "./formatter.js";
 import type { PasteProvider } from "./paste-provider.js";
+import { createLogger } from "./logger.js";
+
+const log = createLogger("diff-reviewer");
 
 /** Tool names that modify files on disk. */
 const FILE_MUTATING_TOOLS = new Set(["edit", "write"]);
@@ -105,7 +108,7 @@ export function generateDiff(cwd: string, options?: GenerateDiffOptions): DiffRe
 
     return buildDiffResult(diff);
   } catch (err) {
-    console.error("[DiffReviewer] Error generating diff:", err);
+    log.error("Error generating diff", { error: err });
     return null;
   }
 }

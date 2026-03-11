@@ -1,6 +1,9 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "fs";
 import { resolve, basename, join } from "path";
 import { expandHome } from "./paths.js";
+import { createLogger } from "./logger.js";
+
+const log = createLogger("parser");
 
 export interface Project {
   path: string;
@@ -38,7 +41,7 @@ export function loadProjects(workspaceDirs: string[], configPath = DEFAULT_CONFI
       config = JSON.parse(readFileSync(expandedConfigPath, "utf-8"));
     }
   } catch (err) {
-    console.error(`[projects] Failed to read ${expandedConfigPath}:`, err);
+    log.error("Failed to read config file", { path: expandedConfigPath, error: err });
   }
 
   const scanDirs = config.scanDirs?.map(expandHome) ?? workspaceDirs;

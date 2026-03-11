@@ -6,6 +6,9 @@
  */
 import { execSync } from "child_process";
 import { writeFileSync, unlinkSync } from "fs";
+import { createLogger } from "./logger.js";
+
+const log = createLogger("paste-provider");
 
 export interface PasteResult {
   /** The paste URL */
@@ -48,7 +51,7 @@ export class AmazonPasteProvider implements PasteProvider {
 
       const tokenMatch = pageHtml.match(/name="authenticity_token"[^>]*value="([^"]+)"/);
       if (!tokenMatch) {
-        console.error("[AmazonPasteProvider] Could not extract CSRF token from paste.amazon.com");
+        log.error("Could not extract CSRF token from paste.amazon.com");
         return null;
       }
       const token = tokenMatch[1];
@@ -73,7 +76,7 @@ export class AmazonPasteProvider implements PasteProvider {
 
         const locationMatch = headers.match(/^location:\s*(.+)$/mi);
         if (!locationMatch) {
-          console.error("[AmazonPasteProvider] No redirect location from paste.amazon.com create");
+          log.error("No redirect location from paste.amazon.com create");
           return null;
         }
 
@@ -82,7 +85,7 @@ export class AmazonPasteProvider implements PasteProvider {
         try { unlinkSync(tmpFile); } catch { /* ignore */ }
       }
     } catch (err) {
-      console.error("[AmazonPasteProvider] Failed to create paste:", err);
+      log.error("Failed to create paste", { provider: "amazon", error: err });
       return null;
     }
   }
@@ -101,7 +104,7 @@ export class GistPasteProvider implements PasteProvider {
 
   async create(content: string, title: string, language = "diff"): Promise<PasteResult | null> {
     if (!this._token) {
-      console.error("[GistPasteProvider] No GITHUB_TOKEN configured");
+      log.error("No GITHUB_TOKEN configured", { provider: "gist" });
       return null;
     }
 
@@ -135,10 +138,10 @@ export class GistPasteProvider implements PasteProvider {
         return { url: data.html_url };
       }
 
-      console.error("[GistPasteProvider] No html_url in response:", data.message ?? "unknown error");
+      log.error("No html_url in gist response", { provider: "gist", apiMessage: data.message ?? "unknown error" });
       return null;
     } catch (err) {
-      console.error("[GistPasteProvider] Failed to create gist:", err);
+      log.error("Failed to create gist", { provider: "gist", error: err });
       return null;
     }
   }

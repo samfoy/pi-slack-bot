@@ -3,6 +3,9 @@ import type { WebClient } from "@slack/web-api";
 import type { Config, ThinkingLevel } from "./config.js";
 import { ThreadSession, type ThreadSessionCreateParams } from "./thread-session.js";
 import { SessionRegistry, type SessionEntry } from "./session-registry.js";
+import { createLogger } from "./logger.js";
+
+const log = createLogger("session-manager");
 
 export class SessionLimitError extends Error {
   constructor() {
@@ -98,7 +101,7 @@ export class BotSessionManager {
     const entries = await this._registry.load();
     if (entries.length === 0) return 0;
 
-    console.log(`[SessionManager] Restoring ${entries.length} session(s) from registry...`);
+    log.info("Restoring sessions from registry", { count: entries.length });
 
     const results = await Promise.allSettled(
       entries.map((entry) => this._restoreOne(entry)),
@@ -114,7 +117,7 @@ export class BotSessionManager {
     // Re-persist to clean up any entries that failed to restore
     this._persistRegistry();
 
-    console.log(`[SessionManager] Restored ${restored}/${entries.length} session(s).`);
+    log.info("Restored sessions", { restored, total: entries.length });
     return restored;
   }
 
@@ -156,7 +159,7 @@ export class BotSessionManager {
   private async _restoreOne(entry: SessionEntry): Promise<boolean> {
     // Skip if a session for this thread was already created (e.g., by an incoming message)
     if (this._sessions.has(entry.threadTs)) {
-      console.log(`[SessionManager] Skipping restore for ${entry.threadTs} — already active.`);
+      log.info("Skipping restore — already active", { threadTs: entry.threadTs });
       return true;
     }
 
@@ -176,7 +179,7 @@ export class BotSessionManager {
 
       return true;
     } catch (err) {
-      console.error(`[SessionManager] Failed to restore session ${entry.threadTs}:`, err);
+      log.error("Failed to restore session", { threadTs: entry.threadTs, error: err });
       return false;
     }
   }
