@@ -6,8 +6,12 @@ import { tmpdir } from "os";
 import {
   downloadSlackFiles,
   formatInboundFileContext,
+  enrichPromptWithFiles,
   createShareFileTool,
+  isImageFile,
   INBOUND_DIR,
+  MAX_VISION_BYTES,
+  MAX_IMAGES_PER_MESSAGE,
   type SlackFile,
   type DownloadedFile,
   type ShareFileContext,
@@ -222,5 +226,145 @@ describe("createShareFileTool", () => {
     }));
     const result = await tool2.execute("tc5", { path: "big-file.txt" }, undefined, undefined, {} as any);
     assert.ok(!(result.content[0] as any).text.includes("Error"));
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  isImageFile                                                        */
+/* ------------------------------------------------------------------ */
+
+describe("isImageFile", () => {
+  it("returns true for png", () => assert.ok(isImageFile("image/png")));
+  it("returns true for jpeg", () => assert.ok(isImageFile("image/jpeg")));
+  it("returns true for gif", () => assert.ok(isImageFile("image/gif")));
+  it("returns true for webp", () => assert.ok(isImageFile("image/webp")));
+  it("returns false for text/plain", () => assert.ok(!isImageFile("text/plain")));
+  it("returns false for application/pdf", () => assert.ok(!isImageFile("application/pdf")));
+  it("returns false for undefined", () => assert.ok(!isImageFile(undefined)));
+  it("returns false for image/svg+xml", () => assert.ok(!isImageFile("image/svg+xml")));
+});
+
+/* ------------------------------------------------------------------ */
+/*  enrichPromptWithFiles                                              */
+/* ------------------------------------------------------------------ */
+
+describe("enrichPromptWithFiles", () => {
+  it("returns original text with empty images when no files", async () => {
+    const result = await enrichPromptWithFiles([], "hello", "/tmp", "xoxb-fake");
+    assert.equal(result.text, "hello");
+    assert.deepEqual(result.images, []);
+  });
+
+  it("extracts images from downloaded image files", async () => {
+    // Create a test image file
+    const imgDir = join(TEST_DIR, "img-test");
+    mkdirSync(join(imgDir, INBOUND_DIR), { recursive: true });
+    const imgPath = join(imgDir, INBOUND_DIR, "test.png");
+    const imgData = Buffer.from("fake-png-data");
+    writeFileSync(imgPath, imgData);
+
+    // Mock downloadSlackFiles by pre-creating the file and using a small file
+    // We'll test via the full function with a mock fetch
+    const mockFetch = vi.fn(async () => ({
+      ok: true,
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(imgData);
+          controller.close();
+        },
+      }),
+    }));
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = mockFetch as any;
+
+    try {
+      const files: SlackFile[] = [{
+        id: "F1",
+        name: "test.png",
+        mimetype: "image/png",
+        size: imgData.length,
+        urlPrivate: "https://example.com/test.png",
+      }];
+
+      const result = await enrichPromptWithFiles(files, "look at this", imgDir, "xoxb-fake");
+      assert.ok(result.text.includes("test.png"));
+      assert.ok(result.text.includes("look at this"));
+      assert.equal(result.images.length, 1);
+      assert.equal(result.images[0].type, "image");
+      assert.equal(result.images[0].mimeType, "image/png");
+      assert.equal(result.images[0].data, imgData.toString("base64"));
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("does not extract non-image files as images", async () => {
+    const txtDir = join(TEST_DIR, "txt-test");
+    mkdirSync(join(txtDir, INBOUND_DIR), { recursive: true });
+    const txtData = Buffer.from("just text");
+
+    const mockFetch = vi.fn(async () => ({
+      ok: true,
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(txtData);
+          controller.close();
+        },
+      }),
+    }));
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = mockFetch as any;
+
+    try {
+      const files: SlackFile[] = [{
+        id: "F2",
+        name: "readme.md",
+        mimetype: "text/plain",
+        size: txtData.length,
+        urlPrivate: "https://example.com/readme.md",
+      }];
+
+      const result = await enrichPromptWithFiles(files, "check this", txtDir, "xoxb-fake");
+      assert.ok(result.text.includes("readme.md"));
+      assert.deepEqual(result.images, []);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("skips images over the vision size limit", async () => {
+    const bigDir = join(TEST_DIR, "big-img-test");
+    mkdirSync(join(bigDir, INBOUND_DIR), { recursive: true });
+    const smallData = Buffer.from("small");
+
+    const mockFetch = vi.fn(async () => ({
+      ok: true,
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(smallData);
+          controller.close();
+        },
+      }),
+    }));
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = mockFetch as any;
+
+    try {
+      const files: SlackFile[] = [{
+        id: "F3",
+        name: "huge.png",
+        mimetype: "image/png",
+        size: MAX_VISION_BYTES + 1, // Over limit
+        urlPrivate: "https://example.com/huge.png",
+      }];
+
+      const result = await enrichPromptWithFiles(files, "", bigDir, "xoxb-fake");
+      // File is still mentioned in text context
+      assert.ok(result.text.includes("huge.png"));
+      // But not in images array because size exceeds limit
+      assert.deepEqual(result.images, []);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });

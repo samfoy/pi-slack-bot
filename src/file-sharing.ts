@@ -14,6 +14,7 @@ import { Readable } from "stream";
 import { Type, type Static } from "@sinclair/typebox";
 import type { WebClient } from "@slack/web-api";
 import type { ToolDefinition } from "@mariozechner/pi-coding-agent";
+import type { ImageContent } from "@mariozechner/pi-ai";
 import { createLogger } from "./logger.js";
 
 const log = createLogger("file-sharing");
@@ -30,6 +31,25 @@ const MAX_DOWNLOAD_BYTES = 10 * 1024 * 1024;
 
 /** Max file size we'll upload to Slack (10 MB). */
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+
+/** Max image size for vision (5 MB before base64 encoding). */
+export const MAX_VISION_BYTES = 5 * 1024 * 1024;
+
+/** Max number of images to send as vision content per message. */
+export const MAX_IMAGES_PER_MESSAGE = 10;
+
+/** Mimetypes we'll send as vision content. */
+export const IMAGE_MIMETYPES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+]);
+
+/** Check if a mimetype is a supported image for vision. */
+export function isImageFile(mimetype?: string): boolean {
+  return mimetype != null && IMAGE_MIMETYPES.has(mimetype);
+}
 
 /* ------------------------------------------------------------------ */
 /*  Inbound: Download files shared by the user in Slack                */
@@ -48,6 +68,7 @@ export interface DownloadedFile {
   originalName: string;
   localPath: string;
   size: number;
+  mimetype?: string;
 }
 
 /**
@@ -85,6 +106,7 @@ export async function downloadSlackFiles(
         originalName: file.name,
         localPath,
         size: file.size,
+        mimetype: file.mimetype,
       });
     } catch (err) {
       log.error("Failed to download file", { fileName: file.name, error: err });
@@ -106,6 +128,79 @@ export function formatInboundFileContext(downloaded: DownloadedFile[]): string {
     lines.push(`- \`${f.localPath}\` (${formatBytes(f.size)}) — originally "${f.originalName}"`);
   }
   return lines.join("\n");
+}
+
+/* ------------------------------------------------------------------ */
+/*  Inbound: Enrich prompt with files + vision images                  */
+/* ------------------------------------------------------------------ */
+
+/** Result of enriching a prompt with uploaded files. */
+export interface EnrichedPrompt {
+  /** The text prompt (with file context prepended if files were shared). */
+  text: string;
+  /** Base64-encoded images extracted from uploaded image files for vision. */
+  images: ImageContent[];
+}
+
+/**
+ * Download files from a Slack message, build text context, and extract
+ * images for vision. Images under the size limit are base64-encoded
+ * and returned alongside the text prompt.
+ */
+export async function enrichPromptWithFiles(
+  files: SlackFile[],
+  text: string,
+  cwd: string,
+  botToken: string,
+): Promise<EnrichedPrompt> {
+  if (files.length === 0) return { text, images: [] };
+
+  const downloaded = await downloadSlackFiles(files, cwd, botToken);
+  const context = formatInboundFileContext(downloaded);
+  const enrichedText = context
+    ? (text ? `${context}\n\n${text}` : context)
+    : text;
+
+  // Extract images for vision
+  const images: ImageContent[] = [];
+  for (const file of downloaded) {
+    if (images.length >= MAX_IMAGES_PER_MESSAGE) {
+      log.info("Image cap reached, skipping remaining images", {
+        cap: MAX_IMAGES_PER_MESSAGE,
+        remaining: downloaded.length - images.length,
+      });
+      break;
+    }
+
+    if (!isImageFile(file.mimetype)) continue;
+
+    if (file.size > MAX_VISION_BYTES) {
+      log.info("Image too large for vision, skipping", {
+        fileName: file.originalName,
+        size: file.size,
+        limit: MAX_VISION_BYTES,
+      });
+      continue;
+    }
+
+    try {
+      const data = readFileSync(file.localPath);
+      images.push({
+        type: "image",
+        data: data.toString("base64"),
+        mimeType: file.mimetype!,
+      });
+      log.info("Image extracted for vision", {
+        fileName: file.originalName,
+        mimeType: file.mimetype,
+        size: file.size,
+      });
+    } catch (err) {
+      log.error("Failed to read image for vision", { fileName: file.originalName, error: err });
+    }
+  }
+
+  return { text: enrichedText, images };
 }
 
 /* ------------------------------------------------------------------ */

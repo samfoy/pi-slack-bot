@@ -2,6 +2,7 @@ import path from "path";
 import { mkdirSync, realpathSync } from "fs";
 import { createAgentSession, createCodingTools, DefaultResourceLoader, SessionManager as PiSessionManager } from "@mariozechner/pi-coding-agent";
 import type { AgentSession, AgentSessionEventListener, CompactionResult, ContextUsage, PromptTemplate } from "@mariozechner/pi-coding-agent";
+import type { ImageContent } from "@mariozechner/pi-ai";
 import type { WebClient } from "@slack/web-api";
 import type { Config, ThinkingLevel } from "./config.js";
 import { StreamingUpdater } from "./streaming-updater.js";
@@ -376,7 +377,7 @@ export class ThreadSession {
     }
   }
 
-  async prompt(text: string): Promise<void> {
+  async prompt(text: string, options?: { images?: ImageContent[] }): Promise<void> {
     // Track last user prompt for retry via reaction
     this._lastUserPrompt = text;
 
@@ -401,7 +402,9 @@ export class ThreadSession {
     });
 
     try {
-      await this._agentSession.prompt(piText);
+      await this._agentSession.prompt(piText, {
+        images: options?.images,
+      });
       // For extension commands that are "handled" immediately (like /ralph),
       // prompt() returns before the agent turn starts. Wait for the first turn to
       // complete, but don't block forever if no turn was started (pure commands).

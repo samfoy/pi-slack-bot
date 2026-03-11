@@ -14,8 +14,7 @@ import {
   handleResumeSessionSelect,
 } from "./session-picker.js";
 import {
-  downloadSlackFiles,
-  formatInboundFileContext,
+  enrichPromptWithFiles,
   type SlackFile,
 } from "./file-sharing.js";
 import {
@@ -29,25 +28,6 @@ import { handleReaction, REACTION_MAP } from "./reactions.js";
 import { createLogger } from "./logger.js";
 
 const log = createLogger("slack");
-
-/**
- * If the message has attached files, download them into the cwd and
- * prepend context about them to the prompt text.
- */
-async function enrichPromptWithFiles(
-  files: SlackFile[],
-  text: string,
-  cwd: string,
-  botToken: string,
-): Promise<string> {
-  if (files.length === 0) return text;
-
-  const downloaded = await downloadSlackFiles(files, cwd, botToken);
-  const context = formatInboundFileContext(downloaded);
-  if (!context) return text;
-
-  return text ? `${context}\n\n${text}` : context;
-}
 
 export interface SlackApp {
   app: App;
@@ -82,8 +62,8 @@ export function createApp(config: Config): SlackApp {
         channelId: pick.channelId,
         cwd: selectedDir,
       });
-      const prompt = await enrichPromptWithFiles(pick.files, pick.prompt, session.cwd, config.slackBotToken);
-      session.enqueue(() => session.prompt(prompt));
+      const { text: prompt, images } = await enrichPromptWithFiles(pick.files, pick.prompt, session.cwd, config.slackBotToken);
+      session.enqueue(() => session.prompt(prompt, { images }));
     } catch (err) {
       if (err instanceof SessionLimitError) {
         await pick.client.chat.postMessage({
@@ -150,8 +130,8 @@ export function createApp(config: Config): SlackApp {
     if (isThreadReply) {
       const existing = sessionManager.get(threadTs);
       if (existing) {
-        const prompt = await enrichPromptWithFiles(slackFiles, text, existing.cwd, config.slackBotToken);
-        existing.enqueue(() => existing.prompt(prompt));
+        const { text: prompt, images } = await enrichPromptWithFiles(slackFiles, text, existing.cwd, config.slackBotToken);
+        existing.enqueue(() => existing.prompt(prompt, { images }));
         return;
       }
       // Thread reply but no session — fall through to create with cwd picker
