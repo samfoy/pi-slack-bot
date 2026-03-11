@@ -55,6 +55,15 @@ describe("StreamingUpdater", () => {
     }
   }
 
+  function flushCoalesceTimers() {
+    // Flush only coalesce timers (short delay, typically 300ms)
+    const coalesce = timers.filter((t) => t.delay <= 500);
+    timers = timers.filter((t) => t.delay > 500);
+    for (const t of coalesce) {
+      t.cb();
+    }
+  }
+
   it("begin posts thinking message and adds reaction", async () => {
     const client = makeClient();
     const updater = new StreamingUpdater(client, 3000);
@@ -171,7 +180,8 @@ describe("StreamingUpdater", () => {
     updater.appendText(state, "Working...");
     updater.appendToolStart(state, "read_file", { path: "/foo.ts" });
 
-    // Tool start triggers immediate flush (no timer needed)
+    // Tool start triggers coalesced flush — fire it
+    flushTimers();
     await new Promise((r) => realSetTimeout(r, 10));
 
     const text1 = client.chat.update.mock.calls[0][0].text;
@@ -179,6 +189,7 @@ describe("StreamingUpdater", () => {
     assert.ok(text1.includes("read_file"), "should contain tool name");
 
     updater.appendToolEnd(state, "read_file", false);
+    flushTimers();
     await new Promise((r) => realSetTimeout(r, 10));
 
     const text2 = client.chat.update.mock.calls[1][0].text;
@@ -209,8 +220,10 @@ describe("StreamingUpdater", () => {
 
     updater.appendText(state, "Done");
     updater.appendToolStart(state, "read", { path: "/a.ts" });
+    flushTimers();
     await new Promise((r) => realSetTimeout(r, 10));
     updater.appendToolEnd(state, "read", false);
+    flushTimers();
     await new Promise((r) => realSetTimeout(r, 10));
 
     await updater.finalize(state);
@@ -244,8 +257,10 @@ describe("StreamingUpdater", () => {
 
     updater.appendText(state, "Result text");
     updater.appendToolStart(state, "bash", { command: "ls" });
+    flushTimers();
     await new Promise((r) => realSetTimeout(r, 10));
     updater.appendToolEnd(state, "bash", false);
+    flushTimers();
     await new Promise((r) => realSetTimeout(r, 10));
 
     await updater.finalize(state);
@@ -267,8 +282,10 @@ describe("StreamingUpdater", () => {
 
     updater.appendText(state, "Done");
     updater.appendToolStart(state, "read", { path: "/x.ts" });
+    flushTimers();
     await new Promise((r) => realSetTimeout(r, 10));
     updater.appendToolEnd(state, "read", false);
+    flushTimers();
     await new Promise((r) => realSetTimeout(r, 10));
 
     // Should not throw
@@ -279,7 +296,7 @@ describe("StreamingUpdater", () => {
     assert.equal(client.reactions.add.mock.calls.length, 2);
   });
 
-  it("tool start triggers immediate flush bypassing throttle timer", async () => {
+  it("tool start cancels pending throttle timer and schedules coalesced flush", async () => {
     const client = makeClient();
     const updater = new StreamingUpdater(client, 3000);
     const state = await updater.begin("C1", "ts1");
@@ -287,11 +304,16 @@ describe("StreamingUpdater", () => {
     updater.appendText(state, "Some text");
     // appendText schedules a throttled timer
     assert.equal(timers.length, 1);
+    const throttleTimer = timers[0];
+    assert.equal(throttleTimer.delay, 3000);
 
     updater.appendToolStart(state, "bash", { command: "ls" });
-    // Immediate flush should cancel the pending timer
-    assert.equal(timers.length, 0);
+    // Throttle timer cancelled, coalesce timer scheduled
+    assert.equal(timers.length, 1);
+    const coalesceTimer = timers[0];
+    assert.ok(coalesceTimer.delay <= 500, `coalesce timer should be short, got ${coalesceTimer.delay}`);
 
+    flushTimers();
     await new Promise((r) => realSetTimeout(r, 10));
     assert.equal(client.chat.update.mock.calls.length, 1);
     const text = client.chat.update.mock.calls[0][0].text;
@@ -299,12 +321,13 @@ describe("StreamingUpdater", () => {
     assert.ok(text.includes("bash"), "should include tool name");
   });
 
-  it("tool end triggers immediate flush bypassing throttle timer", async () => {
+  it("tool end cancels pending throttle timer and schedules coalesced flush", async () => {
     const client = makeClient();
     const updater = new StreamingUpdater(client, 3000);
     const state = await updater.begin("C1", "ts1");
 
     updater.appendToolStart(state, "read_file", { path: "/a.ts" });
+    flushTimers();
     await new Promise((r) => realSetTimeout(r, 10));
     assert.equal(client.chat.update.mock.calls.length, 1);
 
@@ -313,9 +336,12 @@ describe("StreamingUpdater", () => {
     assert.equal(timers.length, 1);
 
     updater.appendToolEnd(state, "read_file", true);
-    // Timer cancelled by immediate flush
-    assert.equal(timers.length, 0);
+    // Throttle timer cancelled, coalesce timer scheduled
+    assert.equal(timers.length, 1);
+    const coalesceTimer = timers[0];
+    assert.ok(coalesceTimer.delay <= 500);
 
+    flushTimers();
     await new Promise((r) => realSetTimeout(r, 10));
     assert.equal(client.chat.update.mock.calls.length, 2);
     const text = client.chat.update.mock.calls[1][0].text;
@@ -331,6 +357,7 @@ describe("StreamingUpdater", () => {
     updater.appendText(state, "Here is some text");
     updater.appendToolStart(state, "write_file", { path: "/b.ts" });
 
+    flushTimers();
     await new Promise((r) => realSetTimeout(r, 10));
 
     const text = client.chat.update.mock.calls[0][0].text;
@@ -513,6 +540,57 @@ describe("StreamingUpdater", () => {
     assert.ok(errCall.text.endsWith("..."), "should end with ...");
   });
 
+  // ── Coalescing tests ──────────────────────────────────────────────
+
+  it("rapid tool start+end within coalesce window produces single flush", async () => {
+    const client = makeClient();
+    const updater = new StreamingUpdater(client, 3000, 3000, 300);
+    const state = await updater.begin("C1", "ts1");
+
+    updater.appendText(state, "Working...");
+
+    // Rapid tool events — all within the coalesce window
+    updater.appendToolStart(state, "read", { path: "/a.ts" });
+    updater.appendToolEnd(state, "read", false);
+    updater.appendToolStart(state, "write", { path: "/b.ts" });
+
+    // Only one coalesce timer should be pending (the first one; subsequent
+    // events see the existing timer and skip)
+    const coalesceTimers = timers.filter((t) => t.delay <= 500);
+    assert.equal(coalesceTimers.length, 1, "should have exactly one coalesce timer");
+
+    // Fire it
+    flushTimers();
+    await new Promise((r) => realSetTimeout(r, 10));
+
+    // Should produce a single chat.update with all state
+    assert.equal(client.chat.update.mock.calls.length, 1);
+    const text = client.chat.update.mock.calls[0][0].text;
+    assert.ok(text.includes("Working..."), "should have text");
+    assert.ok(text.includes("write"), "should have active tool");
+  });
+
+  it("in-flight flush collapse: needsReflush is set when flush in-flight", async () => {
+    const client = makeClient();
+    const updater = new StreamingUpdater(client, 3000, 3000, 300);
+    const state = await updater.begin("C1", "ts1");
+
+    updater.appendText(state, "hello");
+
+    // Simulate flush in-flight
+    state.flushInFlight = true;
+
+    // Tool event while in-flight should set needsReflush
+    updater.appendToolStart(state, "read", { path: "/x.ts" });
+
+    assert.ok(state.needsReflush, "should mark needsReflush when flush is in-flight");
+    // No new coalesce timer should be scheduled
+    const coalesceTimers = timers.filter((t) => t.delay <= 500);
+    assert.equal(coalesceTimers.length, 0, "should not schedule coalesce timer when in-flight");
+
+    state.flushInFlight = false;
+  });
+
   // ── Edge case tests ──────────────────────────────────────────────
 
   it("handles chat.update throwing a network error during flush", async () => {
@@ -557,5 +635,21 @@ describe("StreamingUpdater", () => {
 
     // Should have attempted multiple retries (200 → 120 → 72 → throw)
     assert.ok(client.chat.update.mock.calls.length >= 2, "should have retried");
+  });
+
+  it("finalize cancels pending coalesce timer", async () => {
+    const client = makeClient();
+    const updater = new StreamingUpdater(client, 3000);
+    const state = await updater.begin("C1", "ts1");
+
+    updater.appendText(state, "Some text");
+    updater.appendToolStart(state, "bash", { command: "ls" });
+    // Coalesce timer pending
+    assert.ok(timers.length >= 1);
+
+    await updater.finalize(state);
+
+    // All timers should be cancelled
+    assert.equal(timers.length, 0);
   });
 });

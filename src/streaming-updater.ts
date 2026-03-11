@@ -1,5 +1,6 @@
 import type { WebClient } from "@slack/web-api";
 import { markdownToMrkdwn, splitMrkdwn, formatToolStart, formatToolLog, formatToolCompleted, formatToolSummaryLine, type ToolCallRecord } from "./formatter.js";
+import { retrySlackCall } from "./slack-retry.js";
 
 export interface StreamingState {
   channelId: string;
@@ -13,33 +14,48 @@ export interface StreamingState {
   completedCount: number;
   failedCount: number;
   postedMessageTs: string[];
+  /** Throttled flush timer (for text deltas). */
   timer: ReturnType<typeof setTimeout> | null;
   retryCount: number;
+  /** Coalesce timer for tool events (batches rapid start/end into one flush). */
+  coalesceTimer: ReturnType<typeof setTimeout> | null;
+  /** Whether a flush is currently in-flight. */
+  flushInFlight: boolean;
+  /** Whether another flush was requested while one was in-flight. */
+  needsReflush: boolean;
 }
 
 export class StreamingUpdater {
   private _client: WebClient;
   private _throttleMs: number;
   private _msgLimit: number;
+  private _coalesceMs: number;
 
-  constructor(client: WebClient, throttleMs = 3000, msgLimit = 3000) {
+  constructor(client: WebClient, throttleMs = 3000, msgLimit = 3000, coalesceMs = 300) {
     this._client = client;
     this._throttleMs = throttleMs;
     this._msgLimit = msgLimit;
+    this._coalesceMs = coalesceMs;
   }
 
   async begin(channelId: string, threadTs: string): Promise<StreamingState> {
-    const res = await this._client.chat.postMessage({
-      channel: channelId,
-      thread_ts: threadTs,
-      text: "⏳ Thinking...",
-    });
+    const res = await retrySlackCall(
+      () => this._client.chat.postMessage({
+        channel: channelId,
+        thread_ts: threadTs,
+        text: "⏳ Thinking...",
+      }),
+      "chat.postMessage (begin)",
+    );
 
-    await this._client.reactions.add({
-      channel: channelId,
-      timestamp: res.ts!,
-      name: "hourglass_flowing_sand",
-    });
+    await retrySlackCall(
+      () => this._client.reactions.add({
+        channel: channelId,
+        timestamp: res.ts!,
+        name: "hourglass_flowing_sand",
+      }),
+      "reactions.add (hourglass)",
+    );
 
     return {
       channelId,
@@ -55,6 +71,9 @@ export class StreamingUpdater {
       postedMessageTs: [],
       timer: null,
       retryCount: 0,
+      coalesceTimer: null,
+      flushInFlight: false,
+      needsReflush: false,
     };
   }
 
@@ -66,7 +85,7 @@ export class StreamingUpdater {
   appendToolStart(state: StreamingState, toolName: string, args: unknown): void {
     state.toolLines.push(formatToolStart(toolName, args));
     state.toolRecords.push({ toolName, args, startTime: Date.now() });
-    this._immediateFlush(state);
+    this._coalescedFlush(state);
   }
 
   appendToolEnd(state: StreamingState, toolName: string, isError: boolean): void {
@@ -90,7 +109,7 @@ export class StreamingUpdater {
     } else {
       state.completedCount++;
     }
-    this._immediateFlush(state);
+    this._coalescedFlush(state);
   }
 
   appendRetry(state: StreamingState, attempt: number): void {
@@ -101,28 +120,36 @@ export class StreamingUpdater {
 
   async finalize(state: StreamingState): Promise<void> {
     this._cancelTimer(state);
-    await this._flush(state, false);
+    this._cancelCoalesceTimer(state);
+    await this._doFlush(state, false);
 
     // Upload tool activity log as a collapsible snippet
     if (state.toolRecords.length > 0) {
       await this._uploadToolLog(state);
     }
 
-    await this._client.reactions.remove({
-      channel: state.channelId,
-      timestamp: state.initialMessageTs,
-      name: "hourglass_flowing_sand",
-    });
+    await retrySlackCall(
+      () => this._client.reactions.remove({
+        channel: state.channelId,
+        timestamp: state.initialMessageTs,
+        name: "hourglass_flowing_sand",
+      }),
+      "reactions.remove (hourglass)",
+    );
 
-    await this._client.reactions.add({
-      channel: state.channelId,
-      timestamp: state.initialMessageTs,
-      name: "white_check_mark",
-    });
+    await retrySlackCall(
+      () => this._client.reactions.add({
+        channel: state.channelId,
+        timestamp: state.initialMessageTs,
+        name: "white_check_mark",
+      }),
+      "reactions.add (checkmark)",
+    );
   }
 
   async error(state: StreamingState, err: Error): Promise<void> {
     this._cancelTimer(state);
+    this._cancelCoalesceTimer(state);
 
     // Truncate error message to avoid msg_too_long on the error post itself
     const maxErrLen = this._msgLimit - 20; // room for "❌ Error: " prefix
@@ -133,11 +160,14 @@ export class StreamingUpdater {
     await this._safePost(state.channelId, state.threadTs, `❌ Error: ${msg}`);
 
     try {
-      await this._client.reactions.remove({
-        channel: state.channelId,
-        timestamp: state.initialMessageTs,
-        name: "hourglass_flowing_sand",
-      });
+      await retrySlackCall(
+        () => this._client.reactions.remove({
+          channel: state.channelId,
+          timestamp: state.initialMessageTs,
+          name: "hourglass_flowing_sand",
+        }),
+        "reactions.remove (hourglass/error)",
+      );
     } catch {
       // reaction may already be removed
     }
@@ -147,19 +177,66 @@ export class StreamingUpdater {
     if (state.timer !== null) return;
     state.timer = setTimeout(() => {
       state.timer = null;
-      this._flush(state, true).catch((err) => console.error("[StreamingUpdater] flush error:", err));
+      this._doFlush(state, true).catch((err) => console.error("[StreamingUpdater] flush error:", err));
     }, this._throttleMs);
   }
 
-  private _immediateFlush(state: StreamingState): void {
+  /**
+   * Coalesced flush for tool events. Instead of flushing immediately on every
+   * tool_start/tool_end, we batch rapid events within a short coalesce window.
+   * This dramatically reduces API calls during tool-heavy turns.
+   */
+  private _coalescedFlush(state: StreamingState): void {
+    // Cancel any pending throttle timer — tool events take priority
     this._cancelTimer(state);
-    this._flush(state, true).catch((err) => console.error("[StreamingUpdater] flush error:", err));
+
+    // If a coalesce timer is already pending, do nothing (will flush soon)
+    if (state.coalesceTimer !== null) return;
+
+    // If a flush is in-flight, mark that we need a re-flush when it completes
+    if (state.flushInFlight) {
+      state.needsReflush = true;
+      return;
+    }
+
+    // Schedule a coalesced flush
+    state.coalesceTimer = setTimeout(() => {
+      state.coalesceTimer = null;
+      this._doFlush(state, true).catch((err) => console.error("[StreamingUpdater] coalesced flush error:", err));
+    }, this._coalesceMs);
   }
 
   private _cancelTimer(state: StreamingState): void {
     if (state.timer !== null) {
       clearTimeout(state.timer);
       state.timer = null;
+    }
+  }
+
+  private _cancelCoalesceTimer(state: StreamingState): void {
+    if (state.coalesceTimer !== null) {
+      clearTimeout(state.coalesceTimer);
+      state.coalesceTimer = null;
+    }
+  }
+
+  /**
+   * Execute a flush with in-flight tracking. If another flush is requested
+   * while this one is running, it will be executed after this one completes.
+   */
+  private async _doFlush(state: StreamingState, partial: boolean): Promise<void> {
+    state.flushInFlight = true;
+    try {
+      await this._flush(state, partial);
+    } finally {
+      state.flushInFlight = false;
+      // If a flush was requested while we were running, do it now
+      if (state.needsReflush && partial) {
+        state.needsReflush = false;
+        this._doFlush(state, true).catch((err) =>
+          console.error("[StreamingUpdater] re-flush error:", err),
+        );
+      }
     }
   }
 
@@ -171,13 +248,16 @@ export class StreamingUpdater {
     if (!logContent) return;
 
     try {
-      await this._client.files.uploadV2({
-        channel_id: state.channelId,
-        thread_ts: state.threadTs,
-        content: logContent,
-        filename: "tool-activity.txt",
-        title: `🔧 ${state.toolRecords.length} tool calls`,
-      });
+      await retrySlackCall(
+        () => this._client.files.uploadV2({
+          channel_id: state.channelId,
+          thread_ts: state.threadTs,
+          content: logContent,
+          filename: "tool-activity.txt",
+          title: `🔧 ${state.toolRecords.length} tool calls`,
+        }),
+        "files.uploadV2 (tool log)",
+      );
     } catch (err) {
       console.error("[StreamingUpdater] Failed to upload tool log:", err);
       // Non-fatal: the response text is already posted
@@ -236,18 +316,24 @@ export class StreamingUpdater {
       for (let i = 0; i < chunks.length; i++) {
         if (i < allMessages.length) {
           // Update an existing message in-place
-          await this._client.chat.update({
-            channel: state.channelId,
-            ts: allMessages[i],
-            text: chunks[i],
-          });
+          await retrySlackCall(
+            () => this._client.chat.update({
+              channel: state.channelId,
+              ts: allMessages[i],
+              text: chunks[i],
+            }),
+            "chat.update",
+          );
         } else {
           // Need a new continuation message
-          const res = await this._client.chat.postMessage({
-            channel: state.channelId,
-            thread_ts: state.threadTs,
-            text: chunks[i],
-          });
+          const res = await retrySlackCall(
+            () => this._client.chat.postMessage({
+              channel: state.channelId,
+              thread_ts: state.threadTs,
+              text: chunks[i],
+            }),
+            "chat.postMessage (continuation)",
+          );
           allMessages.push(res.ts!);
         }
       }
@@ -272,11 +358,17 @@ export class StreamingUpdater {
    */
   private async _safePost(channel: string, threadTs: string, text: string): Promise<void> {
     try {
-      await this._client.chat.postMessage({ channel, thread_ts: threadTs, text });
+      await retrySlackCall(
+        () => this._client.chat.postMessage({ channel, thread_ts: threadTs, text }),
+        "chat.postMessage (safe)",
+      );
     } catch (err: unknown) {
       if (this._isMsgTooLong(err)) {
         const truncated = text.slice(0, 1500) + "\n…_(truncated)_";
-        await this._client.chat.postMessage({ channel, thread_ts: threadTs, text: truncated });
+        await retrySlackCall(
+          () => this._client.chat.postMessage({ channel, thread_ts: threadTs, text: truncated }),
+          "chat.postMessage (truncated)",
+        );
       } else {
         throw err;
       }
