@@ -1,10 +1,6 @@
-import { describe, it, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, vi } from "vitest";
 import assert from "node:assert/strict";
-import { basename } from "path";
-import { homedir } from "os";
-import { tmpdir } from "os";
-import { mkdirSync, rmSync } from "fs";
-import { join } from "path";
+import { homedir, tmpdir } from "os";
 import type { Config } from "./config.js";
 
 // We test the createApp logic by simulating Slack events through the registered handlers.
@@ -29,7 +25,7 @@ const baseConfig: Config = {
 
 // Helpers to simulate the Slack event flow without a real App instance.
 
-import { BotSessionManager, SessionLimitError } from "./session-manager.js";
+import { BotSessionManager } from "./session-manager.js";
 import {
   postCwdPicker,
   handleCwdSelect,
@@ -47,7 +43,7 @@ function makeSession(threadTs: string) {
     messageCount: 0,
     model: undefined,
     thinkingLevel: "off" as const,
-    enqueue: vi.fn((fn: () => Promise<void>) => {}),
+    enqueue: vi.fn((_fn: () => Promise<void>) => {}),
     dispose: vi.fn(async () => {}),
     abort: vi.fn(),
     newSession: vi.fn(async () => {}),

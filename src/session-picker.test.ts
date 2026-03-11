@@ -1,4 +1,4 @@
-import { describe, it, beforeEach, vi } from "vitest";
+import { describe, it, vi } from "vitest";
 import assert from "node:assert/strict";
 import {
   getPendingResume,
@@ -28,27 +28,6 @@ function fakeClient() {
     posted,
     updated,
   };
-}
-
-function fakeSessionManager() {
-  return {
-    get: vi.fn(() => undefined),
-    getOrCreate: vi.fn(async (params: any) => ({
-      threadTs: params.threadTs,
-      channelId: params.channelId,
-      cwd: params.cwd,
-      messageCount: 0,
-      model: { id: "test-model" },
-      thinkingLevel: "off",
-      lastActivity: new Date(),
-      isStreaming: false,
-      enqueue: vi.fn(),
-      prompt: vi.fn(),
-      dispose: vi.fn(),
-    })),
-    dispose: vi.fn(),
-    sessionDir: "/tmp/test-sessions",
-  } as any;
 }
 
 /* ------------------------------------------------------------------ */

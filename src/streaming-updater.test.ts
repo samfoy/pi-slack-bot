@@ -1,7 +1,6 @@
 import { describe, it, vi, beforeEach, afterEach } from "vitest";
 import assert from "node:assert/strict";
 import { StreamingUpdater } from "./streaming-updater.js";
-import type { StreamingState } from "./streaming-updater.js";
 
 function makeClient() {
   return {
@@ -31,13 +30,13 @@ describe("StreamingUpdater", () => {
     timers = [];
     nextId = 1;
 
-    // @ts-ignore — fake timers
+    // @ts-expect-error — fake timers — fake timers
     globalThis.setTimeout = (cb: () => void, delay: number) => {
       const id = nextId++;
       timers.push({ cb, delay, id });
       return id;
     };
-    // @ts-ignore
+    // @ts-expect-error — fake timers
     globalThis.clearTimeout = (id: number) => {
       timers = timers.filter((t) => t.id !== id);
     };
@@ -51,15 +50,6 @@ describe("StreamingUpdater", () => {
   function flushTimers() {
     while (timers.length > 0) {
       const t = timers.shift()!;
-      t.cb();
-    }
-  }
-
-  function flushCoalesceTimers() {
-    // Flush only coalesce timers (short delay, typically 300ms)
-    const coalesce = timers.filter((t) => t.delay <= 500);
-    timers = timers.filter((t) => t.delay > 500);
-    for (const t of coalesce) {
       t.cb();
     }
   }
@@ -460,7 +450,7 @@ describe("StreamingUpdater", () => {
   it("retries with lower limit on msg_too_long from chat.update", async () => {
     const client = makeClient();
     let updateAttempt = 0;
-    client.chat.update = vi.fn(async (args: any) => {
+    client.chat.update = vi.fn(async (_args: any) => {
       updateAttempt++;
       // Fail on first attempt, succeed on retry
       if (updateAttempt === 1) {

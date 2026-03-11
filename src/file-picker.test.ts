@@ -9,7 +9,6 @@ import {
   handleFileNav,
   handleFilePickCancel,
   getPendingPick,
-  removePendingPick,
   type FilePickerContext,
 } from "./file-picker.js";
 

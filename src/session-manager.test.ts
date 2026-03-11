@@ -370,7 +370,7 @@ describe("BotSessionManager — restoreAll", () => {
       { threadTs: "ts1", channelId: "C1", cwd: "/tmp/p1", sessionPath: f1 },
     ]);
 
-    const { mgr, factory, client } = makeManager({ sessionDir: tmpDir }, registry);
+    const { mgr, factory } = makeManager({ sessionDir: tmpDir }, registry);
 
     // Simulate a message arriving first and creating the session
     await mgr.getOrCreate({ threadTs: "ts1", channelId: "C1", cwd: "/tmp/p1" });

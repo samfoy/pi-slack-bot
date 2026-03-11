@@ -12,7 +12,6 @@ import {
   handleCwdCancel,
   getPendingCwdPick,
   removePendingCwdPick,
-  type PendingCwdPick,
 } from "./cwd-picker.js";
 
 /* ------------------------------------------------------------------ */

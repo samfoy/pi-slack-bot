@@ -10,7 +10,9 @@
     "start": "node --import tsx/esm src/index.ts",
     "test": "vitest --run",
     "typecheck": "tsc --noEmit",
-    "lint": "tsc --noEmit",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix",
+    "check": "tsc --noEmit && eslint src/ && vitest --run",
     "audit": "npm audit --omit=dev || true",
     "coverage": "find src -name '*.test.ts' | xargs node --import tsx/esm --test --experimental-test-coverage",
     "duplication": "npx -y jscpd --min-lines 10 --min-tokens 50 --threshold 5 src/"
@@ -22,9 +24,12 @@
     "slackify-markdown": "^5.0.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "^22.0.0",
+    "eslint": "^10.0.3",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",
+    "typescript-eslint": "^8.57.0",
     "vitest": "^4.0.18"
   }
 }
