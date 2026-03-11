@@ -88,8 +88,11 @@ export function createApp(config: Config): SlackApp {
 
     // Extract any files attached to this message
     const slackFiles: SlackFile[] = [];
-    if ("files" in event && Array.isArray((event as any).files)) {
-      for (const f of (event as any).files) {
+    // Slack's type for file_share events doesn't include `files` — use interface
+    interface SlackEventFile { id: string; name?: string; mimetype?: string; size?: number; url_private_download?: string; url_private?: string }
+    const eventFiles = "files" in event ? (event as unknown as { files?: SlackEventFile[] }).files : undefined;
+    if (Array.isArray(eventFiles)) {
+      for (const f of eventFiles) {
         slackFiles.push({
           id: f.id,
           name: f.name ?? "unknown",

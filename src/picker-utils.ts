@@ -16,8 +16,17 @@ export function chunk<T>(arr: T[], size: number): T[][] {
   return result;
 }
 
-/** Slack Block Kit block (untyped — Slack's types are too loose to be useful). */
+/** Slack Block Kit block (untyped — Slack's types are too complex for our builders). */
 export type SlackBlock = Record<string, unknown>;
+
+/**
+ * Cast our SlackBlock[] to the type Slack's API expects.
+ * This avoids `as any` at every call site while keeping our block builders simple.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function asBlocks(blocks: SlackBlock[]): any[] {
+  return blocks;
+}
 
 /** Maximum blocks Slack allows per message. */
 export const MAX_SLACK_BLOCKS = 50;

@@ -1,7 +1,7 @@
 import path from "path";
 import { mkdirSync, realpathSync } from "fs";
 import { createAgentSession, createCodingTools, DefaultResourceLoader, SessionManager as PiSessionManager } from "@mariozechner/pi-coding-agent";
-import type { AgentSession, AgentSessionEventListener, CompactionResult, ContextUsage, PromptTemplate } from "@mariozechner/pi-coding-agent";
+import type { AgentSession, AgentSessionEvent, AgentSessionEventListener, CompactionResult, ContextUsage, PromptTemplate } from "@mariozechner/pi-coding-agent";
 import type { ImageContent } from "@mariozechner/pi-ai";
 import type { WebClient } from "@slack/web-api";
 import type { Config, ThinkingLevel } from "./config.js";
@@ -235,7 +235,7 @@ export class ThreadSession {
    */
   private _setupPersistentSubscriber(): void {
     // Buffer events that arrive before streaming state is ready
-    let pendingEvents: Array<{ type: string; [key: string]: unknown }> = [];
+    let pendingEvents: AgentSessionEvent[] = [];
     let stateReady = false;
 
     const flushPending = () => {
@@ -243,7 +243,7 @@ export class ThreadSession {
       const state = this._activeStreamState;
       if (!state) return;
       for (const event of pendingEvents) {
-        this._dispatchStreamEvent(event as any, state);
+        this._dispatchStreamEvent(event, state);
       }
       pendingEvents = [];
     };
@@ -318,7 +318,7 @@ export class ThreadSession {
       }
 
       if (event.type === "auto_compaction_end") {
-        const result = (event as any).result as CompactionResult | undefined;
+        const result = event.result;
         if (result) {
           const after = this.getContextUsage();
           const beforeStr = formatTokenCount(result.tokensBefore);
@@ -354,7 +354,7 @@ export class ThreadSession {
 
       // If state isn't ready yet, buffer the event
       if (!stateReady) {
-        pendingEvents.push(event as any);
+        pendingEvents.push(event);
         return;
       }
 
@@ -364,7 +364,7 @@ export class ThreadSession {
     });
   }
 
-  private _dispatchStreamEvent(event: any, state: import("./streaming-updater.js").StreamingState): void {
+  private _dispatchStreamEvent(event: AgentSessionEvent, state: import("./streaming-updater.js").StreamingState): void {
     if (
       event.type === "message_update" &&
       event.assistantMessageEvent?.type === "text_delta"

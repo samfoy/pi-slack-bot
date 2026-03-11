@@ -11,7 +11,7 @@ import { resolve, join, dirname } from "path";
 import { Type, type Static } from "@sinclair/typebox";
 import type { WebClient } from "@slack/web-api";
 import type { ToolDefinition } from "@mariozechner/pi-coding-agent";
-import { truncLabel, chunk, MAX_SLACK_BLOCKS, type SlackBlock } from "./picker-utils.js";
+import { truncLabel, chunk, asBlocks, MAX_SLACK_BLOCKS, type SlackBlock } from "./picker-utils.js";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -100,7 +100,7 @@ export async function handleFileNav(messageTs: string, dir: string): Promise<voi
     channel: pick.ctx.channelId,
     ts: pick.pickerMessageTs,
     text: `📂 Browsing \`${dir}\``,
-    blocks: blocks as any,
+    blocks: asBlocks(blocks),
   });
 }
 
@@ -309,7 +309,7 @@ export function createFilePickerTool(
         channel: ctx.channelId,
         thread_ts: ctx.threadTs,
         text: `📂 Browsing \`${startDir}\``,
-        blocks: blocks as any,
+        blocks: asBlocks(blocks),
       });
 
       const messageTs = result.ts!;

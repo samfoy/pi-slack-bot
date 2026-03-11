@@ -13,6 +13,7 @@ import type { WebClient } from "@slack/web-api";
 import type { ThreadSession } from "./thread-session.js";
 import type { BotSessionManager } from "./session-manager.js";
 import { encodeCwd } from "./session-path.js";
+import { asBlocks } from "./picker-utils.js";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -167,7 +168,7 @@ export async function postProjectSessionPicker(
     channel,
     thread_ts: threadTs,
     text: "📂 Pick a project to browse sessions",
-    blocks: blocks as any,
+    blocks: asBlocks(blocks),
   });
 
   if (result.ts) {
@@ -247,7 +248,7 @@ async function postSessionList(
     channel,
     thread_ts: threadTs,
     text: `📋 Sessions in ${projectLabel}`,
-    blocks: blocks as any,
+    blocks: asBlocks(blocks),
   });
 
   if (result.ts) {

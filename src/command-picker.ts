@@ -12,6 +12,7 @@ import { join } from "path";
 import { homedir } from "os";
 import type { WebClient } from "@slack/web-api";
 import type { ThreadSession } from "./thread-session.js";
+import { asBlocks } from "./picker-utils.js";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -164,7 +165,7 @@ export async function postRalphPicker(
     channel,
     thread_ts: threadTs,
     text: "🎩 Pick a Ralph preset",
-    blocks: blocks as any,
+    blocks: asBlocks(blocks),
   });
 
   if (result.ts) {
@@ -195,7 +196,7 @@ export async function handleRalphPresetSelect(
     channel: pending.channelId,
     ts: messageTs,
     text: `🎩 Ralph preset: *${presetName}*\nType your task prompt as a reply in this thread.`,
-    blocks: [
+    blocks: asBlocks([
       {
         type: "section",
         text: {
@@ -203,7 +204,7 @@ export async function handleRalphPresetSelect(
           text: `🎩 Selected: *${presetName}*\n\n_Send your task prompt as the next message in this thread._`,
         },
       },
-    ] as any,
+    ]),
   });
 }
 
@@ -287,7 +288,7 @@ export async function postPromptPicker(
     channel,
     thread_ts: threadTs,
     text: "📝 Pick a prompt template",
-    blocks: blocks as any,
+    blocks: asBlocks(blocks),
   });
 
   if (result.ts) {

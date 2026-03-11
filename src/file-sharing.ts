@@ -336,7 +336,8 @@ async function downloadFile(url: string, destPath: string, botToken: string): Pr
   }
 
   const ws = createWriteStream(destPath);
-  await pipeline(Readable.fromWeb(res.body as any), ws);
+  // Node.js types don't perfectly align between fetch's ReadableStream and stream.Readable
+  await pipeline(Readable.fromWeb(res.body as ReadableStream<Uint8Array>), ws);
 }
 
 /**

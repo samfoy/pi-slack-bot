@@ -12,7 +12,7 @@ import { homedir } from "os";
 import type { WebClient } from "@slack/web-api";
 import type { Project } from "./parser.js";
 import type { SlackFile } from "./file-sharing.js";
-import { truncLabel, chunk, MAX_SLACK_BLOCKS, type SlackBlock } from "./picker-utils.js";
+import { truncLabel, chunk, asBlocks, MAX_SLACK_BLOCKS, type SlackBlock } from "./picker-utils.js";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -220,7 +220,7 @@ export async function postCwdPicker(params: PostCwdPickerParams): Promise<void> 
     channel: params.channel,
     thread_ts: params.threadTs,
     text: `📂 Browsing \`${startDir}\``,
-    blocks: blocks as any,
+    blocks: asBlocks(blocks),
   });
 
   if (!result.ts) return;
@@ -289,7 +289,7 @@ export async function handleCwdNav(messageTs: string, dir: string): Promise<void
     channel: pick.channelId,
     ts: pick.pickerMessageTs,
     text: `📂 Browsing \`${dir}\``,
-    blocks: blocks as any,
+    blocks: asBlocks(blocks),
   });
 }
 
