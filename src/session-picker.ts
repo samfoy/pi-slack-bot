@@ -13,7 +13,7 @@ import type { WebClient } from "@slack/web-api";
 import type { ThreadSession } from "./thread-session.js";
 import type { BotSessionManager } from "./session-manager.js";
 import { encodeCwd } from "./session-path.js";
-import { asBlocks } from "./picker-utils.js";
+import { section, actions, button, type SlackBlock } from "./picker-utils.js";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -133,34 +133,20 @@ export async function postProjectSessionPicker(
     };
   });
 
-  const blocks: Array<Record<string, unknown>> = [
-    {
-      type: "section",
-      text: { type: "mrkdwn", text: "📂 *Pick a project to browse sessions:*" },
-    },
+  const blocks: SlackBlock[] = [
+    section("📂 *Pick a project to browse sessions:*"),
   ];
 
   for (let i = 0; i < choices.length; i += MAX_BUTTONS_PER_BLOCK) {
     const chunk = choices.slice(i, i + MAX_BUTTONS_PER_BLOCK);
-    blocks.push({
-      type: "actions",
-      elements: chunk.map((c) => ({
-        type: "button",
-        text: { type: "plain_text", text: c.label },
-        action_id: `resume_project_${c.index}`,
-        value: c.value,
-      })),
-    });
+    blocks.push(actions(chunk.map((c) => button(c.label, `resume_project_${c.index}`, c.value))));
   }
 
   // Add descriptions
   const descLines = projects.slice(0, 15).map((p) =>
     `\`${p.cwd}\` — ${p.count} session${p.count > 1 ? "s" : ""}, last ${relativeTime(new Date(p.lastModified))}`
   ).join("\n");
-  blocks.push({
-    type: "section",
-    text: { type: "mrkdwn", text: descLines },
-  });
+  blocks.push(section(descLines));
 
   if (blocks.length > 50) blocks.length = 50;
 
@@ -168,7 +154,7 @@ export async function postProjectSessionPicker(
     channel,
     thread_ts: threadTs,
     text: "📂 Pick a project to browse sessions",
-    blocks: asBlocks(blocks),
+    blocks: blocks,
   });
 
   if (result.ts) {
@@ -201,11 +187,8 @@ async function postSessionList(
 
   const projectLabel = basename(projectDir) || projectDir;
 
-  const blocks: Array<Record<string, unknown>> = [
-    {
-      type: "section",
-      text: { type: "mrkdwn", text: `📋 *Sessions in \`${projectLabel}\`:*` },
-    },
+  const blocks: SlackBlock[] = [
+    section(`📋 *Sessions in \`${projectLabel}\`:*`),
   ];
 
   const choices = capped.map((s, i) => {
@@ -220,15 +203,7 @@ async function postSessionList(
 
   for (let i = 0; i < choices.length; i += MAX_BUTTONS_PER_BLOCK) {
     const chunk = choices.slice(i, i + MAX_BUTTONS_PER_BLOCK);
-    blocks.push({
-      type: "actions",
-      elements: chunk.map((c) => ({
-        type: "button",
-        text: { type: "plain_text", text: c.label },
-        action_id: `resume_session_${c.index}`,
-        value: c.path,
-      })),
-    });
+    blocks.push(actions(chunk.map((c) => button(c.label, `resume_session_${c.index}`, c.path))));
   }
 
   // Descriptions
@@ -237,10 +212,7 @@ async function postSessionList(
     const msg = truncate(s.firstMessage || "—", 80);
     return `${name} — ${msg} (${s.messageCount} msgs, ${relativeTime(s.modified)})`;
   }).join("\n");
-  blocks.push({
-    type: "section",
-    text: { type: "mrkdwn", text: descLines },
-  });
+  blocks.push(section(descLines));
 
   if (blocks.length > 50) blocks.length = 50;
 
@@ -248,7 +220,7 @@ async function postSessionList(
     channel,
     thread_ts: threadTs,
     text: `📋 Sessions in ${projectLabel}`,
-    blocks: asBlocks(blocks),
+    blocks: blocks,
   });
 
   if (result.ts) {

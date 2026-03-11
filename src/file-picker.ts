@@ -11,7 +11,7 @@ import { resolve, join, dirname } from "path";
 import { Type, type Static } from "@sinclair/typebox";
 import type { WebClient } from "@slack/web-api";
 import type { ToolDefinition } from "@mariozechner/pi-coding-agent";
-import { truncLabel, chunk, asBlocks, MAX_SLACK_BLOCKS, type SlackBlock } from "./picker-utils.js";
+import { truncLabel, chunk, section, actions, button, MAX_SLACK_BLOCKS, type SlackBlock } from "./picker-utils.js";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -100,7 +100,7 @@ export async function handleFileNav(messageTs: string, dir: string): Promise<voi
     channel: pick.ctx.channelId,
     ts: pick.pickerMessageTs,
     text: `📂 Browsing \`${dir}\``,
-    blocks: asBlocks(blocks),
+    blocks: blocks,
   });
 }
 
@@ -162,32 +162,18 @@ function buildPickerBlocks(dir: string, rootCwd: string): SlackBlock[] {
   const entries = listDir(dir);
   const blocks: SlackBlock[] = [];
 
-  blocks.push({
-    type: "section",
-    text: { type: "mrkdwn", text: `📂 *\`${dir}\`*\nSelect a file or navigate into a folder:` },
-  });
+  blocks.push(section(`📂 *\`${dir}\`*\nSelect a file or navigate into a folder:`));
 
   // Navigation buttons: Up (if not at rootCwd)
-  const navElements: SlackBlock[] = [];
+  const navBtns = [];
   const resolvedDir = resolve(dir);
   const resolvedRoot = resolve(rootCwd);
   if (resolvedDir !== resolvedRoot) {
-    navElements.push({
-      type: "button",
-      text: { type: "plain_text", text: "⬆️ Parent" },
-      action_id: "file_pick_nav_parent",
-      value: dirname(dir),
-    });
+    navBtns.push(button("⬆️ Parent", "file_pick_nav_parent", dirname(dir)));
   }
-  navElements.push({
-    type: "button",
-    text: { type: "plain_text", text: "❌ Cancel" },
-    action_id: "file_pick_cancel",
-    value: "cancel",
-    style: "danger",
-  });
+  navBtns.push(button("❌ Cancel", "file_pick_cancel", "cancel", "danger"));
 
-  blocks.push({ type: "actions", elements: navElements });
+  blocks.push(actions(navBtns));
 
   // Directory buttons
   const dirs = entries.filter((e) => e.isDir);
@@ -197,15 +183,9 @@ function buildPickerBlocks(dir: string, rootCwd: string): SlackBlock[] {
   if (dirs.length > 0) {
     const dirChunks = chunk(dirs, MAX_BUTTONS);
     for (const group of dirChunks) {
-      blocks.push({
-        type: "actions",
-        elements: group.map((entry, i) => ({
-          type: "button",
-          text: { type: "plain_text", text: `📁 ${truncLabel(entry.name)}` },
-          action_id: `file_pick_nav_${blocks.length}_${i}`,
-          value: entry.fullPath,
-        })),
-      });
+      blocks.push(actions(group.map((entry, i) =>
+        button(`📁 ${truncLabel(entry.name)}`, `file_pick_nav_${blocks.length}_${i}`, entry.fullPath)
+      )));
     }
   }
 
@@ -213,32 +193,20 @@ function buildPickerBlocks(dir: string, rootCwd: string): SlackBlock[] {
   if (files.length > 0) {
     const fileChunks = chunk(files, MAX_BUTTONS);
     for (const group of fileChunks) {
-      blocks.push({
-        type: "actions",
-        elements: group.map((entry, i) => ({
-          type: "button",
-          text: { type: "plain_text", text: `📄 ${truncLabel(entry.name)}` },
-          action_id: `file_pick_select_${blocks.length}_${i}`,
-          value: entry.fullPath,
-        })),
-      });
+      blocks.push(actions(group.map((entry, i) =>
+        button(`📄 ${truncLabel(entry.name)}`, `file_pick_select_${blocks.length}_${i}`, entry.fullPath)
+      )));
     }
   }
 
   if (dirs.length === 0 && files.length === 0) {
-    blocks.push({
-      type: "section",
-      text: { type: "mrkdwn", text: "_Empty directory_" },
-    });
+    blocks.push(section("_Empty directory_"));
   }
 
   // Slack has a 50-block limit; truncate if needed
   if (blocks.length > MAX_SLACK_BLOCKS) {
     blocks.length = MAX_SLACK_BLOCKS - 1;
-    blocks.push({
-      type: "section",
-      text: { type: "mrkdwn", text: "_…too many entries to display. Use a more specific startDir._" },
-    });
+    blocks.push(section("_…too many entries to display. Use a more specific startDir._"));
   }
 
   return blocks;
@@ -309,7 +277,7 @@ export function createFilePickerTool(
         channel: ctx.channelId,
         thread_ts: ctx.threadTs,
         text: `📂 Browsing \`${startDir}\``,
-        blocks: asBlocks(blocks),
+        blocks: blocks,
       });
 
       const messageTs = result.ts!;

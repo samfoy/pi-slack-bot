@@ -1,6 +1,38 @@
 /**
  * Shared utilities for Slack Block Kit picker UIs.
  */
+import type { KnownBlock, Block, Button, SectionBlock, ActionsBlock } from "@slack/types";
+
+/** Slack Block Kit block. */
+export type SlackBlock = KnownBlock | Block;
+
+/** Slack button element. */
+export type SlackButton = Button;
+
+/* ── Block builders ─────────────────────────────────────────────── */
+
+/** Build a section block with mrkdwn text. */
+export function section(text: string): SectionBlock {
+  return { type: "section", text: { type: "mrkdwn", text } };
+}
+
+/** Build an actions block with button elements. */
+export function actions(elements: Button[]): ActionsBlock {
+  return { type: "actions", elements };
+}
+
+/** Build a button element. */
+export function button(text: string, actionId: string, value: string, style?: "primary" | "danger"): Button {
+  return {
+    type: "button",
+    text: { type: "plain_text", text },
+    action_id: actionId,
+    value,
+    ...(style ? { style } : {}),
+  };
+}
+
+/* ── Utilities ──────────────────────────────────────────────────── */
 
 /** Truncate a label for Slack button text. */
 export function truncLabel(name: string, max = 60): string {
@@ -14,18 +46,6 @@ export function chunk<T>(arr: T[], size: number): T[][] {
     result.push(arr.slice(i, i + size));
   }
   return result;
-}
-
-/** Slack Block Kit block (untyped — Slack's types are too complex for our builders). */
-export type SlackBlock = Record<string, unknown>;
-
-/**
- * Cast our SlackBlock[] to the type Slack's API expects.
- * This avoids `as any` at every call site while keeping our block builders simple.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function asBlocks(blocks: SlackBlock[]): any[] {
-  return blocks;
 }
 
 /** Maximum blocks Slack allows per message. */

@@ -12,7 +12,7 @@ import { join } from "path";
 import { homedir } from "os";
 import type { WebClient } from "@slack/web-api";
 import type { ThreadSession } from "./thread-session.js";
-import { asBlocks } from "./picker-utils.js";
+import { section, actions, button, type SlackBlock } from "./picker-utils.js";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -138,34 +138,20 @@ export async function postRalphPicker(
     return;
   }
 
-  const blocks: Array<Record<string, unknown>> = [
-    {
-      type: "section",
-      text: { type: "mrkdwn", text: "🎩 *Pick a Ralph preset:*" },
-    },
-    {
-      type: "actions",
-      elements: presets.map((p, i) => ({
-        type: "button",
-        text: { type: "plain_text", text: `${p.name}` },
-        action_id: `ralph_preset_${i}`,
-        value: p.name,
-      })),
-    },
+  const blocks: SlackBlock[] = [
+    section("🎩 *Pick a Ralph preset:*"),
+    actions(presets.map((p, i) => button(p.name, `ralph_preset_${i}`, p.name))),
   ];
 
   // Add descriptions as context
   const descLines = presets.map((p) => `*${p.name}:* ${p.description}`).join("\n");
-  blocks.push({
-    type: "section",
-    text: { type: "mrkdwn", text: descLines },
-  });
+  blocks.push(section(descLines));
 
   const result = await client.chat.postMessage({
     channel,
     thread_ts: threadTs,
     text: "🎩 Pick a Ralph preset",
-    blocks: asBlocks(blocks),
+    blocks: blocks,
   });
 
   if (result.ts) {
@@ -196,15 +182,9 @@ export async function handleRalphPresetSelect(
     channel: pending.channelId,
     ts: messageTs,
     text: `🎩 Ralph preset: *${presetName}*\nType your task prompt as a reply in this thread.`,
-    blocks: asBlocks([
-      {
-        type: "section",
-        text: {
-          type: "mrkdwn",
-          text: `🎩 Selected: *${presetName}*\n\n_Send your task prompt as the next message in this thread._`,
-        },
-      },
-    ]),
+    blocks: [
+      section(`🎩 Selected: *${presetName}*\n\n_Send your task prompt as the next message in this thread._`),
+    ],
   });
 }
 
@@ -248,26 +228,15 @@ export async function postPromptPicker(
     return;
   }
 
-  const blocks: Array<Record<string, unknown>> = [
-    {
-      type: "section",
-      text: { type: "mrkdwn", text: "📝 *Pick a prompt template:*" },
-    },
+  const blocks: SlackBlock[] = [
+    section("📝 *Pick a prompt template:*"),
   ];
 
   // Split into action blocks (max 25 buttons each)
   const MAX_PER_BLOCK = 25;
   for (let i = 0; i < templates.length; i += MAX_PER_BLOCK) {
-    const chunk = templates.slice(i, i + MAX_PER_BLOCK);
-    blocks.push({
-      type: "actions",
-      elements: chunk.map((t, j) => ({
-        type: "button",
-        text: { type: "plain_text", text: `/${t.name}` },
-        action_id: `prompt_pick_${i + j}`,
-        value: t.name,
-      })),
-    });
+    const tmplChunk = templates.slice(i, i + MAX_PER_BLOCK);
+    blocks.push(actions(tmplChunk.map((t, j) => button(`/${t.name}`, `prompt_pick_${i + j}`, t.name))));
   }
 
   // Add descriptions
@@ -275,10 +244,7 @@ export async function postPromptPicker(
     .map((t) => `\`/${t.name}\` — ${t.description || "_no description_"}`)
     .join("\n");
   if (descLines) {
-    blocks.push({
-      type: "section",
-      text: { type: "mrkdwn", text: descLines },
-    });
+    blocks.push(section(descLines));
   }
 
   // Cap at 50 blocks
@@ -288,7 +254,7 @@ export async function postPromptPicker(
     channel,
     thread_ts: threadTs,
     text: "📝 Pick a prompt template",
-    blocks: asBlocks(blocks),
+    blocks: blocks,
   });
 
   if (result.ts) {

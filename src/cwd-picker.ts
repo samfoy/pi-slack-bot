@@ -12,7 +12,7 @@ import { homedir } from "os";
 import type { WebClient } from "@slack/web-api";
 import type { Project } from "./parser.js";
 import type { SlackFile } from "./file-sharing.js";
-import { truncLabel, chunk, asBlocks, MAX_SLACK_BLOCKS, type SlackBlock } from "./picker-utils.js";
+import { truncLabel, chunk, section, actions, button, MAX_SLACK_BLOCKS, type SlackBlock } from "./picker-utils.js";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -110,55 +110,29 @@ export function buildCwdPickerBlocks(
   const blocks: SlackBlock[] = [];
 
   // Header with current path
-  blocks.push({
-    type: "section",
-    text: { type: "mrkdwn", text: `📂 *\`${dir}\`*\nSelect this directory or navigate into a folder:` },
-  });
+  blocks.push(section(`📂 *\`${dir}\`*\nSelect this directory or navigate into a folder:`));
 
   // Control buttons: Select, Parent, Cancel
-  const controlElements: SlackBlock[] = [
-    {
-      type: "button",
-      text: { type: "plain_text", text: "✅ Select this directory" },
-      action_id: "cwd_pick_select",
-      value: dir,
-      style: "primary",
-    },
+  const controlBtns = [
+    button("✅ Select this directory", "cwd_pick_select", dir, "primary"),
   ];
 
   const resolvedDir = resolve(dir);
   if (resolvedDir !== "/") {
-    controlElements.push({
-      type: "button",
-      text: { type: "plain_text", text: "⬆️ Parent" },
-      action_id: "cwd_pick_parent",
-      value: dirname(dir),
-    });
+    controlBtns.push(button("⬆️ Parent", "cwd_pick_parent", dirname(dir)));
   }
 
-  controlElements.push({
-    type: "button",
-    text: { type: "plain_text", text: "❌ Cancel" },
-    action_id: "cwd_pick_cancel",
-    value: "cancel",
-    style: "danger",
-  });
+  controlBtns.push(button("❌ Cancel", "cwd_pick_cancel", "cancel", "danger"));
 
-  blocks.push({ type: "actions", elements: controlElements });
+  blocks.push(actions(controlBtns));
 
   // Pinned project shortcuts (if any, and not already in the current dir listing)
   if (projects.length > 0) {
     const pinChunks = chunk(projects.slice(0, MAX_PIN_BUTTONS * 2), MAX_PIN_BUTTONS);
     for (const group of pinChunks) {
-      blocks.push({
-        type: "actions",
-        elements: group.map((p, i) => ({
-          type: "button",
-          text: { type: "plain_text", text: `📌 ${truncLabel(p.label)}` },
-          action_id: `cwd_pick_pin_${blocks.length}_${i}`,
-          value: p.path,
-        })),
-      });
+      blocks.push(actions(group.map((p, i) =>
+        button(`📌 ${truncLabel(p.label)}`, `cwd_pick_pin_${blocks.length}_${i}`, p.path)
+      )));
     }
   }
 
@@ -168,30 +142,18 @@ export function buildCwdPickerBlocks(
   if (dirs.length > 0) {
     const dirChunks = chunk(dirs, MAX_DIR_BUTTONS);
     for (const group of dirChunks) {
-      blocks.push({
-        type: "actions",
-        elements: group.map((entry, i) => ({
-          type: "button",
-          text: { type: "plain_text", text: `📁 ${truncLabel(entry.name)}` },
-          action_id: `cwd_pick_nav_${blocks.length}_${i}`,
-          value: entry.fullPath,
-        })),
-      });
+      blocks.push(actions(group.map((entry, i) =>
+        button(`📁 ${truncLabel(entry.name)}`, `cwd_pick_nav_${blocks.length}_${i}`, entry.fullPath)
+      )));
     }
   } else {
-    blocks.push({
-      type: "section",
-      text: { type: "mrkdwn", text: "_No subdirectories_" },
-    });
+    blocks.push(section("_No subdirectories_"));
   }
 
   // Slack has a 50-block limit; truncate if needed
   if (blocks.length > MAX_SLACK_BLOCKS) {
     blocks.length = MAX_SLACK_BLOCKS - 1;
-    blocks.push({
-      type: "section",
-      text: { type: "mrkdwn", text: "_…too many entries to display._" },
-    });
+    blocks.push(section("_…too many entries to display._"));
   }
 
   return blocks;
@@ -220,7 +182,7 @@ export async function postCwdPicker(params: PostCwdPickerParams): Promise<void> 
     channel: params.channel,
     thread_ts: params.threadTs,
     text: `📂 Browsing \`${startDir}\``,
-    blocks: asBlocks(blocks),
+    blocks: blocks,
   });
 
   if (!result.ts) return;
@@ -289,7 +251,7 @@ export async function handleCwdNav(messageTs: string, dir: string): Promise<void
     channel: pick.channelId,
     ts: pick.pickerMessageTs,
     text: `📂 Browsing \`${dir}\``,
-    blocks: asBlocks(blocks),
+    blocks: blocks,
   });
 }
 
