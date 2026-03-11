@@ -104,6 +104,11 @@ export class ThreadSession {
    */
   private _lastContextWarningThreshold = 0;
 
+  /**
+   * The last user prompt sent to the agent. Used for retry via reaction.
+   */
+  private _lastUserPrompt: string | null = null;
+
   static async create(params: ThreadSessionCreateParams): Promise<ThreadSession> {
     // Resolve symlinks so the cwd matches what pi TUI uses (realpath).
     // Without this, ~/workplace/Rosie stays as /home/samfp/workplace/Rosie
@@ -372,6 +377,9 @@ export class ThreadSession {
   }
 
   async prompt(text: string): Promise<void> {
+    // Track last user prompt for retry via reaction
+    this._lastUserPrompt = text;
+
     // Rewrite !command → /command for pi extension commands & prompt templates.
     // Bot-level commands (help, model, etc.) are intercepted before reaching here,
     // so only pi commands (pdd, ralph, review, etc.) arrive at this point.
@@ -560,5 +568,10 @@ export class ThreadSession {
   /** The configured paste provider for diff uploads. */
   get pasteProvider(): PasteProvider {
     return this._pasteProvider;
+  }
+
+  /** The last user prompt sent to the agent (for retry). */
+  get lastUserPrompt(): string | null {
+    return this._lastUserPrompt;
   }
 }

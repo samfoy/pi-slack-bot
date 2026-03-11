@@ -25,6 +25,10 @@ import {
   handleCwdCancel,
   type PendingCwdPick,
 } from "./cwd-picker.js";
+import { handleReaction, REACTION_MAP } from "./reactions.js";
+import { createLogger } from "./logger.js";
+
+const log = createLogger("slack");
 
 /**
  * If the message has attached files, download them into the cwd and
@@ -174,6 +178,60 @@ export function createApp(config: Config): SlackApp {
         return;
       }
       throw err;
+    }
+  });
+
+  /* ── Reaction handler ─────────────────────────────────────────── */
+
+  app.event("reaction_added", async ({ event, client }) => {
+    // Only handle reactions on messages
+    if (event.item.type !== "message") return;
+    // Only respond to the allowed user
+    if (event.user !== config.slackUserId) return;
+
+    const channel = event.item.channel;
+    const messageTs = event.item.ts;
+    const emoji = event.reaction;
+
+    // Only handle mapped reactions
+    if (!(emoji in REACTION_MAP)) return;
+
+    // Find the thread this message belongs to. The reaction event gives us
+    // the message ts but not the thread_ts. We need to look up the message
+    // to find its thread. For simplicity, check if any session matches.
+    // The message could be the thread parent or a reply — either way,
+    // we need the thread_ts.
+    let threadTs: string | undefined;
+    try {
+      const msgInfo = await client.conversations.replies({
+        channel,
+        ts: messageTs,
+        limit: 1,
+        inclusive: true,
+      });
+      const msg = msgInfo.messages?.[0];
+      threadTs = msg?.thread_ts ?? msg?.ts;
+    } catch {
+      // Can't determine thread — ignore
+      return;
+    }
+
+    if (!threadTs) return;
+    const session = sessionManager.get(threadTs);
+    if (!session) return;
+
+    const handled = await handleReaction(emoji, session, client, channel, threadTs);
+    if (handled) {
+      // Remove the reaction to indicate it was processed
+      try {
+        await client.reactions.remove({
+          channel,
+          timestamp: messageTs,
+          name: emoji,
+        });
+      } catch {
+        // Reaction may already be removed or we lack permission
+      }
     }
   });
 
