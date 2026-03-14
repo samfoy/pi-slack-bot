@@ -1,0 +1,12 @@
+.git
+node_modules
+dist
+.ralph
+specs
+docs/tasks
+.slack-files
+.env
+*.test.ts
+vitest.config.ts
+eslint.config.mjs
+knip.config.ts
