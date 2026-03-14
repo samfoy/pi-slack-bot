@@ -1,7 +1,13 @@
 {
   "name": "pi-slack-bot",
   "version": "0.1.0",
-  "description": "Slack bot exposing pi as a conversational coding agent",
+  "description": "Slack bot exposing pi as a conversational coding agent. Chat with pi in Slack DMs with streaming responses, tool execution, threaded sessions, and model switching.",
+  "keywords": ["pi-package"],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/samfoy/pi-slack-bot"
+  },
   "type": "module",
   "engines": {
     "node": ">=20"
@@ -17,6 +23,9 @@
     "coverage": "find src -name '*.test.ts' | xargs node --import tsx/esm --test --experimental-test-coverage",
     "dead-code": "knip --exclude types",
     "duplication": "npx -y jscpd --min-lines 10 --min-tokens 50 --threshold 5 src/"
+  },
+  "pi": {
+    "image": "https://raw.githubusercontent.com/samfoy/pi-slack-bot/main/assets/preview.jpg"
   },
   "dependencies": {
     "@mariozechner/pi-coding-agent": "^0.55.4",
