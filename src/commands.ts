@@ -5,7 +5,7 @@ import type { ThreadSession } from "./thread-session.js";
 import type { Pin, PinStore } from "./pin-store.js";
 import type { BotSessionManager, ThreadSessionInfo } from "./session-manager.js";
 import type { ThinkingLevel } from "./config.js";
-import { postRalphPicker, postPromptPicker } from "./command-picker.js";
+import { postPromptPicker } from "./command-picker.js";
 import { postModelPicker } from "./model-picker.js";
 import { postProjectSessionPicker, postToTuiCommand } from "./session-picker.js";
 import { cancelSession, showDiff, compactSession } from "./session-actions.js";
@@ -53,12 +53,6 @@ const handlers: Record<string, CommandHandler> = {
       "`!restart` — Restart the bot process (sessions auto-restore)",
       "`!resume` — Browse and resume a local pi TUI session",
       "`!to-tui` — Get a command to open this Slack session in your terminal",
-      "`!ralph [preset] [prompt]` — Start a Ralph loop (shows preset picker if no args)",
-      "`!ralph status` — Show current loop state",
-      "`!ralph pause` / `!ralph resume` — Pause or resume the active loop",
-      "`!ralph steer <msg>` — Queue guidance for the next iteration",
-      "`!ralph stop` — Stop the active loop",
-      "`!ralph presets` — List available presets",
       "`!plan <idea>` — Start a PDD planning session",
       "`!prompt [name]` — Run a prompt template (shows picker if no args)",
       "",
@@ -197,21 +191,6 @@ const handlers: Record<string, CommandHandler> = {
     // code 75 which run.sh interprets as "restart requested".
     await ctx.sessionManager.flushRegistry();
     setTimeout(() => process.exit(75), 500);
-  },
-
-  async ralph(ctx, args) {
-    if (!ctx.session) {
-      await reply(ctx, "No active session. Send a message first to start one.");
-      return;
-    }
-    const trimmed = args.trim();
-    if (trimmed) {
-      // Forward directly: !ralph feature build X → /ralph feature build X
-      ctx.session.enqueue(() => ctx.session!.prompt(`/ralph ${trimmed}`));
-    } else {
-      // No args — show preset picker buttons
-      await postRalphPicker(ctx.client, ctx.channel, ctx.threadTs, ctx.session);
-    }
   },
 
   async plan(ctx, args) {

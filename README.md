@@ -9,7 +9,6 @@ A Slack bot that exposes [pi](https://github.com/mariozechner/pi-coding-agent) a
 - **Project picker** — fuzzy-matches project names or shows buttons to pick a working directory
 - **Interactive file picker** — browse and select files via Slack buttons when the agent needs user input
 - **Commands** — `!model`, `!thinking`, `!cwd`, `!cancel`, `!new`, `!sessions`, and more
-- **Ralph loops** — run multi-agent [Ralph](https://github.com/samfoy/pi-ralph) presets via `!ralph` with an interactive preset picker (requires the Ralph extension installed separately)
 - **Prompt templates** — run file-based prompt templates via `!prompt` with a picker UI
 - **Attach server** — external processes can connect via WebSocket and stream to Slack threads
 - **Session management** — configurable limits, idle timeout, automatic cleanup
@@ -96,7 +95,6 @@ Then DM your bot in Slack. The first message starts a session:
 | `!sessions` | List all active sessions |
 | `!cwd <path>` | Change working directory (creates a new session) |
 | `!reload` | Reload extensions and prompt templates |
-| `!ralph [preset] [prompt]` | Run a Ralph multi-agent loop |
 | `!plan <idea>` | Start a PDD planning session |
 | `!prompt [name]` | Run a prompt template |
 
@@ -147,7 +145,7 @@ src/
 ├── formatter.ts          # Markdown → Slack mrkdwn conversion, splitting
 ├── parser.ts             # Message parsing, project discovery, fuzzy match
 ├── commands.ts           # !command dispatch
-├── command-picker.ts     # Ralph preset & prompt template button pickers
+├── command-picker.ts     # Prompt template button picker
 ├── file-picker.ts        # Interactive file browser via Slack buttons
 └── attach-server.ts      # WebSocket server for external session attachment
 ```

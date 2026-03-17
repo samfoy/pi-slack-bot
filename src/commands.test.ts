@@ -132,19 +132,6 @@ describe("!help", () => {
     assert.ok(msgs[0].includes("!help"));
     assert.ok(msgs[0].includes("!cancel"));
     assert.ok(msgs[0].includes("!model"));
-    assert.ok(msgs[0].includes("!ralph"));
-  });
-
-  it("includes ralph subcommands in help", async () => {
-    const ctx = makeCtx();
-    await dispatchCommand("help", "", ctx);
-    const msg = getPosted(ctx)[0];
-    assert.ok(msg.includes("!ralph status"), "missing !ralph status");
-    assert.ok(msg.includes("!ralph pause"), "missing !ralph pause");
-    assert.ok(msg.includes("!ralph resume"), "missing !ralph resume");
-    assert.ok(msg.includes("!ralph steer"), "missing !ralph steer");
-    assert.ok(msg.includes("!ralph stop"), "missing !ralph stop");
-    assert.ok(msg.includes("!ralph presets"), "missing !ralph presets");
   });
 });
 

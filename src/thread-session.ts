@@ -12,7 +12,7 @@ import { encodeCwd } from "./session-path.js";
 import { hasFileModifications, postDiffReview, getHeadRef } from "./diff-reviewer.js";
 import { createPasteProvider, type PasteProvider } from "./paste-provider.js";
 import { createNoopUiContext } from "./noop-ui-context.js";
-import { isRalphNotification, isRalphEndNotification } from "./ralph-notifications.js";
+
 import { formatTokenCount, formatContextUsage, getContextWarningThreshold } from "./context-format.js";
 import { createLogger } from "./logger.js";
 import type { ToolCallRecord } from "./formatter.js";
@@ -94,12 +94,6 @@ export class ThreadSession {
   private _turnCompletePromise: Promise<void> | null = null;
   private _turnCompleteResolve: (() => void) | null = null;
   /**
-   * When true, a ralph loop is running in the background.
-   * The persistent subscriber skips streaming to Slack but still resolves turn promises.
-   */
-  private _ralphBackgroundActive = false;
-
-  /**
    * Tracks the highest context warning threshold we've already warned about.
    * Reset to 0 on newSession(). Prevents repeated warnings at the same level.
    */
@@ -157,19 +151,10 @@ export class ThreadSession {
     });
 
     // Bind extensions with a minimal UI context so session_start fires.
-    // This is required for extensions like ralph that load state in session_start.
+    // This is required for extensions that load state in session_start.
     const uiContext = createNoopUiContext({
       notify: (message: string, type?: "info" | "warning" | "error") => {
         log.info("Extension notification", { type: type ?? "info", message, threadTs: params.threadTs });
-        // Detect ralph-related notifications and post to Slack.
-        if (isRalphNotification(message)) {
-          if (isRalphEndNotification(message)) {
-            ts._ralphBackgroundActive = false;
-          }
-          ts._postToThread(`🎩 ${message}`).catch((err) => {
-            log.error("Failed to post ralph notification", { threadTs: params.threadTs, error: err });
-          });
-        }
       },
     });
     await session.bindExtensions({
@@ -231,7 +216,7 @@ export class ThreadSession {
 
   /**
    * Set up a persistent event subscriber that handles all agent turns,
-   * including those triggered asynchronously by extensions (e.g., ralph loops).
+   * including those triggered asynchronously by extensions.
    */
   private _setupPersistentSubscriber(): void {
     // Buffer events that arrive before streaming state is ready
@@ -254,10 +239,6 @@ export class ThreadSession {
         pendingEvents = [];
         this._turnToolRecords = [];
         this._turnBaseRef = getHeadRef(this.cwd);
-
-        // If ralph loop is running in background, skip Slack streaming
-        // but still track turn lifecycle for promise resolution.
-        if (this._ralphBackgroundActive) return;
 
         // A new agent turn is starting — create streaming state
         this._updater.begin(this.channelId, this.threadTs).then((state) => {
@@ -297,7 +278,7 @@ export class ThreadSession {
             log.error("Failed to finalize streaming", { threadTs: this.threadTs, error: err });
           });
         } else {
-          // No streaming state (e.g. ralph background) — still check context
+          // No streaming state — still check context
           this._checkContextWarning();
         }
         // Resolve the turn-complete promise so prompt() can return
@@ -331,9 +312,6 @@ export class ThreadSession {
         }
         return;
       }
-
-      // If ralph background mode, skip streaming events
-      if (this._ralphBackgroundActive) return;
 
       // Track tool records for diff review (before state-ready check)
       if (event.type === "tool_execution_start") {
@@ -383,20 +361,11 @@ export class ThreadSession {
 
     // Rewrite !command → /command for pi extension commands & prompt templates.
     // Bot-level commands (help, model, etc.) are intercepted before reaching here,
-    // so only pi commands (pdd, ralph, review, etc.) arrive at this point.
+    // so only pi commands (pdd, review, etc.) arrive at this point.
     const piText = text.replace(/^!/, "/");
 
-    // Detect ralph loop commands that should run in background.
-    // /ralph <preset> <prompt> starts a loop; /ralph stop|status are instant.
-    const isRalphLoopStart = /^\/(ralph)\s+(?!stop\b|status\b|list\b|help\b|pause\b|resume\b|steer\b|presets\b|history\b|loops\b)\S+/i.test(piText);
-    if (isRalphLoopStart) {
-      this._ralphBackgroundActive = true;
-      await this._postToThread("🎩 Starting Ralph loop in background...");
-    }
-
     // Create a turn-complete promise that will be resolved by the persistent subscriber
-    // when agent_end fires. This ensures we wait for the full agent turn, including
-    // turns triggered asynchronously by extensions (e.g., ralph loops via sendUserMessage).
+    // when agent_end fires. This ensures we wait for the full agent turn.
     this._turnCompletePromise = new Promise<void>((resolve) => {
       this._turnCompleteResolve = resolve;
     });
@@ -405,7 +374,7 @@ export class ThreadSession {
       await this._agentSession.prompt(piText, {
         images: options?.images,
       });
-      // For extension commands that are "handled" immediately (like /ralph),
+      // For extension commands that are "handled" immediately,
       // prompt() returns before the agent turn starts. Wait for the first turn to
       // complete, but don't block forever if no turn was started (pure commands).
       if (this._turnCompletePromise !== null) {
@@ -413,12 +382,6 @@ export class ThreadSession {
           this._turnCompletePromise,
           new Promise<void>((resolve) => setTimeout(resolve, 500)),
         ]);
-      }
-
-      // If a ralph loop is running in background, don't wait for it.
-      // The loop will post its own status messages to the thread.
-      if (this._ralphBackgroundActive) {
-        return;
       }
 
       // If the agent is still streaming (extension triggered another turn),
@@ -454,18 +417,12 @@ export class ThreadSession {
 
   abort(): void {
     void this._agentSession.abort();
-    this._ralphBackgroundActive = false;
     // Resolve any pending turn promise so prompt() unblocks
     if (this._turnCompleteResolve) {
       this._turnCompleteResolve();
       this._turnCompleteResolve = null;
       this._turnCompletePromise = null;
     }
-  }
-
-  /** Whether a ralph loop is currently running in the background. */
-  get ralphBackgroundActive(): boolean {
-    return this._ralphBackgroundActive;
   }
 
   /** Post a plain text message to the Slack thread (not streamed, just a single message). */

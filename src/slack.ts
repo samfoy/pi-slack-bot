@@ -5,9 +5,7 @@ import { loadProjects } from "./parser.js";
 import { parseCommand, dispatchCommand } from "./commands.js";
 import { handleFileSelect, handleFileNav, handleFilePickCancel } from "./file-picker.js";
 import {
-  handleRalphPresetSelect,
   handlePromptSelect,
-  tryConsumeRalphPrompt,
 } from "./command-picker.js";
 import { handleModelSelect } from "./model-picker.js";
 import {
@@ -119,13 +117,6 @@ export function createApp(config: Config): SlackApp {
         session,
         pinStore,
       });
-      return;
-    }
-
-    // Check for pending Ralph preset prompt follow-up
-    const ralphFollow = tryConsumeRalphPrompt(threadTs, text);
-    if (ralphFollow) {
-      ralphFollow.session.enqueue(() => ralphFollow.session.prompt(ralphFollow.command));
       return;
     }
 
@@ -250,9 +241,6 @@ export function createApp(config: Config): SlackApp {
   onButtonAction(/^file_pick_nav_/, handleFileNav);
   onButtonAction("file_pick_nav_parent", handleFileNav);
   onButtonAction("file_pick_cancel", (ts) => handleFilePickCancel(ts), { noValue: true });
-
-  /* ── Ralph preset picker ─────────────────────────────────────────── */
-  onButtonAction(/^ralph_preset_/, handleRalphPresetSelect);
 
   /* ── Prompt template picker ──────────────────────────────────────── */
   onButtonAction(/^prompt_pick_/, handlePromptSelect);

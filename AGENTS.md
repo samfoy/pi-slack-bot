@@ -74,7 +74,3 @@ npm run audit       # No critical vulnerabilities
 - `dotenv` — env loading
 
 Minimize new dependencies. Prefer Node.js built-ins and the existing stack.
-
-## Ralph Integration
-
-This project supports [Ralph](https://github.com/samfoy/pi-ralph) multi-agent loops via the `!ralph` command. Ralph config lives in `ralph.yml`. The `.ralph/` directory is Ralph's working state — don't modify it manually.
