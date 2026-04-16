@@ -55,7 +55,7 @@ describe("loadConfig", () => {
     setRequired();
     const cfg = loadConfig();
     assert.equal(cfg.provider, "anthropic");
-    assert.equal(cfg.model, "claude-sonnet-4-5");
+    assert.equal(cfg.model, "claude-opus-4-6-1m");
     assert.equal(cfg.thinkingLevel, "off");
     assert.equal(cfg.maxSessions, 10);
     assert.equal(cfg.sessionIdleTimeoutSecs, 3600);

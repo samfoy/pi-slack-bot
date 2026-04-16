@@ -62,7 +62,7 @@ export function loadConfig(): Config {
     slackUserId: required("SLACK_USER_ID"),
 
     provider: optional("PROVIDER", "anthropic"),
-    model: optional("MODEL", "claude-sonnet-4-5"),
+    model: optional("MODEL", "claude-opus-4-6-1m"),
     thinkingLevel: parseThinkingLevel(optional("THINKING_LEVEL", "off")),
 
     maxSessions: optionalInt("MAX_SESSIONS", 10),
