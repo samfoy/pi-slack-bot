@@ -22,6 +22,7 @@ const baseConfig: Config = {
   slackMsgLimit: 3900,
   workspaceDirs: [],
   pasteProvider: "none" as const,
+  modelAllowlist: [],
 };
 
 function makeSession(threadTs: string, cwd = "/tmp", sessionPath = `/tmp/sessions/${threadTs}.jsonl`) {

@@ -21,6 +21,7 @@ const baseConfig: Config = {
   slackMsgLimit: 3900,
   workspaceDirs: [],
   pasteProvider: "none" as const,
+  modelAllowlist: [],
 };
 
 // Helpers to simulate the Slack event flow without a real App instance.

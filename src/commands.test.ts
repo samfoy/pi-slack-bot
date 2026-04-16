@@ -85,6 +85,7 @@ function makeCtx(overrides: Partial<CommandContext> = {}): CommandContext {
     client,
     sessionManager,
     pinStore: makePinStore(),
+    modelAllowlist: [],
     session: undefined,
     ...overrides,
     _posted: posted,

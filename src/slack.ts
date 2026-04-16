@@ -128,6 +128,7 @@ export function createApp(config: Config): SlackApp {
         sessionManager,
         session,
         pinStore,
+        modelAllowlist: config.modelAllowlist,
       });
       return;
     }

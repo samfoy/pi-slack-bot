@@ -49,9 +49,13 @@ export function removePendingModelPick(messageTs: string): void {
 /* ------------------------------------------------------------------ */
 
 /** Get available models from the session's model registry, grouped by provider. */
-export function getAvailableModels(session: ThreadSession): Map<string, ModelInfo[]> {
+export function getAvailableModels(session: ThreadSession, allowlist: string[] = []): Map<string, ModelInfo[]> {
   const registry = session.modelRegistry;
-  const models = registry.getAvailable();
+  let models = registry.getAvailable();
+
+  if (allowlist.length > 0) {
+    models = models.filter((m) => allowlist.some((pattern) => m.id.toLowerCase().includes(pattern)));  
+  }
 
   const grouped = new Map<string, ModelInfo[]>();
   for (const m of models) {
@@ -106,8 +110,9 @@ export async function postModelPicker(
   channel: string,
   threadTs: string,
   session: ThreadSession,
+  modelAllowlist: string[] = [],
 ): Promise<void> {
-  const grouped = getAvailableModels(session);
+  const grouped = getAvailableModels(session, modelAllowlist);
 
   if (grouped.size === 0) {
     await client.chat.postMessage({

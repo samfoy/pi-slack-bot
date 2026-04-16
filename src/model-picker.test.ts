@@ -112,6 +112,31 @@ describe("getAvailableModels", () => {
     const grouped = getAvailableModels(session);
     assert.equal(grouped.get("anthropic")![0].reasoning, true);
   });
+
+  it("filters models by allowlist substrings", () => {
+    const models = [
+      makeModel("anthropic", "claude-opus-4-6-1m"),
+      makeModel("anthropic", "claude-sonnet-4-5"),
+      makeModel("anthropic", "claude-haiku-3-5"),
+      makeModel("google", "gemini-2.5-pro"),
+    ];
+    const session = makeMockSession(models);
+    const grouped = getAvailableModels(session, ["opus", "sonnet"]);
+
+    assert.equal(grouped.size, 1); // only anthropic
+    assert.equal(grouped.get("anthropic")!.length, 2);
+    assert.equal(grouped.has("google"), false);
+  });
+
+  it("shows all models when allowlist is empty", () => {
+    const models = [
+      makeModel("anthropic", "claude-opus-4-6-1m"),
+      makeModel("google", "gemini-2.5-pro"),
+    ];
+    const session = makeMockSession(models);
+    const grouped = getAvailableModels(session, []);
+    assert.equal(grouped.size, 2);
+  });
 });
 
 /* ------------------------------------------------------------------ */

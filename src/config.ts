@@ -26,6 +26,9 @@ export interface Config {
   // cwd discovery
   workspaceDirs: string[];
 
+  // Model picker
+  modelAllowlist: string[];
+
   // Diff review
   pasteProvider: PasteProviderType;
 }
@@ -75,6 +78,11 @@ export function loadConfig(): Config {
     workspaceDirs: optional("WORKSPACE_DIRS", "~/projects")
       .split(",")
       .map((d) => expandHome(d.trim()))
+      .filter(Boolean),
+
+    modelAllowlist: optional("MODEL_ALLOWLIST", "")
+      .split(",")
+      .map((s) => s.trim().toLowerCase())
       .filter(Boolean),
 
     pasteProvider: parsePasteProviderType(optional("PASTE_PROVIDER", "amazon")),

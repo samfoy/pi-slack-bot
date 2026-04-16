@@ -18,6 +18,7 @@ export interface CommandContext {
   sessionManager: BotSessionManager;
   session: ThreadSession | undefined;
   pinStore: PinStore;
+  modelAllowlist: string[];
 }
 
 type CommandHandler = (ctx: CommandContext, args: string) => Promise<void>;
@@ -108,7 +109,7 @@ const handlers: Record<string, CommandHandler> = {
     const modelName = args.trim();
     if (!modelName) {
       // No args — show interactive model picker
-      await postModelPicker(ctx.client, ctx.channel, ctx.threadTs, ctx.session);
+      await postModelPicker(ctx.client, ctx.channel, ctx.threadTs, ctx.session, ctx.modelAllowlist);
       return;
     }
     try {
