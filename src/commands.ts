@@ -14,11 +14,24 @@ import { formatContextUsage, formatContextBar } from "./context-format.js";
 export interface CommandContext {
   channel: string;
   threadTs: string;
+  userId: string;
   client: WebClient;
   sessionManager: BotSessionManager;
   session: ThreadSession | undefined;
   pinStore: PinStore;
   modelAllowlist: string[];
+}
+
+/* ------------------------------------------------------------------ */
+/*  Per-user rate limiting                                             */
+/* ------------------------------------------------------------------ */
+
+const RATE_LIMIT_MS = 5_000;
+const lastCommandTime = new Map<string, number>();
+
+/** Clear rate limit state (for testing). */
+export function _resetRateLimits(): void {
+  lastCommandTime.clear();
 }
 
 type CommandHandler = (ctx: CommandContext, args: string) => Promise<void>;
@@ -346,6 +359,16 @@ export async function dispatchCommand(
   args: string,
   ctx: CommandContext,
 ): Promise<boolean> {
+  // Per-user rate limiting (5s cooldown)
+  const now = Date.now();
+  const lastTime = lastCommandTime.get(ctx.userId);
+  if (lastTime && now - lastTime < RATE_LIMIT_MS) {
+    const waitSecs = ((RATE_LIMIT_MS - (now - lastTime)) / 1000).toFixed(1);
+    await reply(ctx, `⏳ Slow down! Try again in ${waitSecs}s.`);
+    return true;
+  }
+  lastCommandTime.set(ctx.userId, now);
+
   const handler = handlers[name];
   if (handler) {
     await handler(ctx, args);

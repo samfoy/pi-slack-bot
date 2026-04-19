@@ -124,6 +124,7 @@ export function createApp(config: Config): SlackApp {
       await dispatchCommand(cmd.name, cmd.args, {
         channel,
         threadTs,
+        userId: event.user,
         client,
         sessionManager,
         session,

@@ -64,6 +64,7 @@ function removePendingPick(messageTs: string): void {
 
 const MAX_BUTTONS = 20; // leave room for nav buttons in the 25-element limit
 const TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
 
 /**
  * Handle a file_pick_select action (user clicked a file).
@@ -71,6 +72,22 @@ const TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 export async function handleFileSelect(messageTs: string, value: string): Promise<void> {
   const pick = pending.get(messageTs);
   if (!pick) return;
+
+  // Validate file size before accepting selection
+  try {
+    const stat = statSync(value);
+    if (stat.size > MAX_FILE_SIZE_BYTES) {
+      const sizeMB = (stat.size / (1024 * 1024)).toFixed(1);
+      await pick.ctx.client.chat.postMessage({
+        channel: pick.ctx.channelId,
+        thread_ts: pick.ctx.threadTs,
+        text: `❌ File too large (${sizeMB} MB). Maximum is 10 MB. Please select a smaller file.`,
+      });
+      return; // Keep picker open for another selection
+    }
+  } catch {
+    // If we can't stat the file, let it through — the consumer will handle errors
+  }
 
   removePendingPick(messageTs);
 

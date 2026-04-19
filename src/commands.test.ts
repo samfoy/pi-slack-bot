@@ -3,8 +3,13 @@ import assert from "node:assert/strict";
 import { tmpdir } from "os";
 import { mkdirSync, rmSync } from "fs";
 import { join } from "path";
-import { parseCommand, dispatchCommand, type CommandContext } from "./commands.js";
+import { parseCommand, dispatchCommand, _resetRateLimits, type CommandContext } from "./commands.js";
 import { PinStore } from "./pin-store.js";
+
+// Reset rate limit state before each test
+beforeEach(() => {
+  _resetRateLimits();
+});
 
 // --- parseCommand ---
 
@@ -82,6 +87,7 @@ function makeCtx(overrides: Partial<CommandContext> = {}): CommandContext {
   return {
     channel: "C1",
     threadTs: "ts1",
+    userId: "U_TEST",
     client,
     sessionManager,
     pinStore: makePinStore(),
