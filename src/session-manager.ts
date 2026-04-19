@@ -202,10 +202,14 @@ export class BotSessionManager {
   private async _reap(): Promise<void> {
     const now = Date.now();
     const timeout = this._config.sessionIdleTimeoutSecs * 1000;
+    const toReap: string[] = [];
     for (const [ts, session] of this._sessions) {
       if (now - session.lastActivity.getTime() > timeout) {
-        await this.dispose(ts);
+        toReap.push(ts);
       }
+    }
+    for (const ts of toReap) {
+      await this.dispose(ts);
     }
   }
 }

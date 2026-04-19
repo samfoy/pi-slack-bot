@@ -37,12 +37,14 @@ process.on("unhandledRejection", (reason) => {
   log.error("Unhandled promise rejection", { error: reason });
 });
 
-process.on("SIGINT", async () => {
-  log.info("Shutting down");
-  slackApp.sessionManager.stopReaper();
-  await slackApp.sessionManager.disposeAll();
-  await slackApp.sessionManager.flushRegistry();
-  slackApp.sessionManager.disposeRegistry();
-  await slackApp.app.stop();
-  process.exit(0);
-});
+for (const sig of ["SIGINT", "SIGTERM"] as const) {
+  process.on(sig, async () => {
+    log.info(`Shutting down (${sig})`);
+    slackApp.sessionManager.stopReaper();
+    await slackApp.sessionManager.disposeAll();
+    await slackApp.sessionManager.flushRegistry();
+    slackApp.sessionManager.disposeRegistry();
+    await slackApp.app.stop();
+    process.exit(0);
+  });
+}
