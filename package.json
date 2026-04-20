@@ -1,6 +1,6 @@
 {
   "name": "pi-slack-bot",
-  "version": "0.1.3",
+  "version": "1.0.0",
   "description": "Slack bot exposing pi as a conversational coding agent. Chat with pi in Slack DMs with streaming responses, tool execution, threaded sessions, and model switching.",
   "keywords": [
     "pi-package",
