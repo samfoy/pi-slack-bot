@@ -35,13 +35,19 @@ if [ -z "${NODE_PATH:-}" ]; then
   echo "[run.sh] WARNING: NODE_PATH not set — pi packages (providers, extensions) may not be found" >&2
 fi
 
+# Node heap sizing: Node 22 auto-sizes --max-old-space-size from the cgroup memory limit
+# (roughly half of MemoryMax). Under a 1G systemd MemoryMax this lands at ~380 MB, which
+# is too small for multiple active sessions. Set a sane floor unless the caller overrides.
+: "${NODE_OPTIONS:=--max-old-space-size=768}"
+export NODE_OPTIONS
+
 RESTART_EXIT_CODE=75
 RESTART_DELAY=2  # seconds between restart cycles
 
 while true; do
   echo "[run.sh] Starting pi-slack-bot..."
   set +e
-  npm start
+  node --import tsx/esm src/index.ts
   exit_code=$?
   set -e
 

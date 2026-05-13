@@ -116,6 +116,34 @@ Any unrecognized `!command` is forwarded to pi as `/command` (for extensions and
 5. Install the app to your workspace and copy the bot token (`xoxb-...`)
 6. Find your Slack user ID (click your profile → "..." → "Copy member ID")
 
+## Deployment (Linux / systemd)
+
+Use `run.sh` as the process entry point — it handles `NODE_PATH` resolution for pi packages and auto-restarts on exit code 75 (issued by `!restart`).
+
+```bash
+./run.sh
+# or in tmux:
+tmux new -d -s bot './run.sh'
+```
+
+**Heap sizing under cgroup memory limits.** Node 22 auto-sizes `--max-old-space-size` to roughly half the cgroup `MemoryMax`. Under a 1 GB systemd limit this gives V8 only ~380 MB of old-gen — not enough for several active sessions. `run.sh` applies a safe default (`NODE_OPTIONS=--max-old-space-size=768`) unless you've already set it.
+
+If you run under systemd, add `MemoryHigh` generously above the heap ceiling so the kernel doesn't OOM-kill before V8 can GC:
+
+```ini
+[Service]
+ExecStart=/path/to/pi-slack-bot/run.sh
+Restart=on-failure
+RestartSec=10
+StartLimitBurst=5
+StartLimitIntervalSec=300
+Environment=NODE_OPTIONS=--max-old-space-size=768
+MemoryHigh=1200M
+MemoryMax=1500M
+```
+
+Adjust `--max-old-space-size` based on how many concurrent sessions you expect (`MAX_SESSIONS` × ~100–150 MB/session is a reasonable estimate).
+
 ## Development
 
 ```bash
