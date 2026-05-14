@@ -8,7 +8,7 @@
  * Uses pi's SessionManager.listAll() to discover sessions from ~/.pi/agent/sessions/.
  */
 import { basename } from "path";
-import { SessionManager as PiSessionManager, type SessionInfo } from "@mariozechner/pi-coding-agent";
+import { SessionManager as PiSessionManager, type SessionInfo } from "@earendil-works/pi-coding-agent";
 import type { WebClient } from "@slack/web-api";
 import type { ThreadSession } from "./thread-session.js";
 import type { BotSessionManager } from "./session-manager.js";

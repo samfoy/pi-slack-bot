@@ -8,7 +8,7 @@
  * explicitly defined returns a no-op function, preventing runtime crashes
  * when the pi SDK adds new ExtensionUIContext members.
  */
-import type { ExtensionUIContext } from "@mariozechner/pi-coding-agent";
+import type { ExtensionUIContext } from "@earendil-works/pi-coding-agent";
 
 /** A plain-text theme that passes strings through unchanged. */
 const NOOP_THEME = {

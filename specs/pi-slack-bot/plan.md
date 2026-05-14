@@ -24,7 +24,7 @@
 **Objective:** Runnable Node.js project with typed config loaded from `.env`.
 
 **Implementation:**
-- `package.json` — ESM, Node 22+, deps: `@slack/bolt`, `@mariozechner/pi-coding-agent`, `slackify-markdown`, `ws`, `dotenv`, `tsx` (dev)
+- `package.json` — ESM, Node 22+, deps: `@slack/bolt`, `@earendil-works/pi-coding-agent`, `slackify-markdown`, `ws`, `dotenv`, `tsx` (dev)
 - `tsconfig.json` — ESM, `NodeNext` modules, strict
 - `src/config.ts` — load and validate all env vars, throw on missing required vars, export typed `Config`
 - `.env.example` — all variables with defaults documented

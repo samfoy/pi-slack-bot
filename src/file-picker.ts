@@ -10,7 +10,7 @@ import { readdirSync, statSync } from "fs";
 import { resolve, join, dirname } from "path";
 import { Type, type Static } from "@sinclair/typebox";
 import type { WebClient } from "@slack/web-api";
-import type { ToolDefinition } from "@mariozechner/pi-coding-agent";
+import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { truncLabel, chunk, section, actions, button, MAX_SLACK_BLOCKS, type SlackBlock } from "./picker-utils.js";
 
 /* ------------------------------------------------------------------ */

@@ -13,8 +13,8 @@ import { pipeline } from "stream/promises";
 import { Readable } from "stream";
 import { Type, type Static } from "@sinclair/typebox";
 import type { WebClient } from "@slack/web-api";
-import type { ToolDefinition } from "@mariozechner/pi-coding-agent";
-import type { ImageContent } from "@mariozechner/pi-ai";
+import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
+import type { ImageContent } from "@earendil-works/pi-ai";
 import { createLogger } from "./logger.js";
 
 const log = createLogger("file-sharing");

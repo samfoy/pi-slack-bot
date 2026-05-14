@@ -38,7 +38,7 @@ Research complete. Next step: **Step 6 (Create Detailed Design)** — user confi
 | Cancel | session.abort() per thread |
 
 ## Prior Art Researched
-1. **pi SDK** (`@mariozechner/pi-coding-agent`) — createAgentSession, AgentSession, SessionManager, events, tools
+1. **pi SDK** (`@earendil-works/pi-coding-agent`) — createAgentSession, AgentSession, SessionManager, events, tools
 2. **pi-mom** (`packages/mom` in pi-mono) — official pi Slack bot. Per-channel sessions, no streaming, no tool approval. Good reference for SDK wiring and persistence.
 3. **AISlackBot** (Amazon-internal, Python) — slack_bolt + ACP subprocess. Streaming, tool approval, commands, shortcuts. Good reference for Slack UX patterns.
 4. **PiSlackRemote** (Amazon-internal, TS) — pi extension that bridges local session to Slack DM thread via webhook + MCP polling. Reference for the "attach" flow.

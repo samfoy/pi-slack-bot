@@ -30,7 +30,7 @@ Single Node.js process. No subprocesses, no polling, no tmux.
 ## Core Dependencies
 
 - `@slack/bolt` — Slack SDK with Socket Mode (real-time WebSocket events)
-- `@mariozechner/pi-coding-agent` — pi's SDK for programmatic agent sessions
+- `@earendil-works/pi-coding-agent` — pi's SDK for programmatic agent sessions
 
 ## Key Features
 

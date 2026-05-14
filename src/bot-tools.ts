@@ -7,7 +7,7 @@
  * naturally through conversation.
  */
 import { Type, type Static } from "@sinclair/typebox";
-import type { ToolDefinition } from "@mariozechner/pi-coding-agent";
+import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type { BotSessionManager } from "./session-manager.js";
 import type { ThreadSession } from "./thread-session.js";
 import { type ThinkingLevel, VALID_THINKING_LEVELS } from "./config.js";

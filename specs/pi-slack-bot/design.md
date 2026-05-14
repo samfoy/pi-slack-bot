@@ -2,7 +2,7 @@
 
 ## Overview
 
-pi-slack-bot is a single-process Node.js application that exposes pi as a conversational coding agent via Slack DMs. It connects to Slack via Socket Mode (WebSocket) using `@slack/bolt` and manages per-thread `AgentSession` instances via pi's TypeScript SDK (`@mariozechner/pi-coding-agent`).
+pi-slack-bot is a single-process Node.js application that exposes pi as a conversational coding agent via Slack DMs. It connects to Slack via Socket Mode (WebSocket) using `@slack/bolt` and manages per-thread `AgentSession` instances via pi's TypeScript SDK (`@earendil-works/pi-coding-agent`).
 
 The bot is single-user — it only responds to one configured Slack user. Each top-level DM creates a new agent session; thread replies continue that session. Sessions are persisted as JSONL files (pi's native format) and survive bot restarts. Responses stream progressively to Slack with time-based throttling and automatic message splitting.
 
@@ -120,7 +120,7 @@ Out of scope:
 | Concern | Choice | Rationale |
 |---------|--------|-----------|
 | Slack SDK | `@slack/bolt` (Socket Mode) | Higher-level than raw SDK, handles ack() automatically |
-| Pi SDK | `@mariozechner/pi-coding-agent` | In-process, type-safe, native TS |
+| Pi SDK | `@earendil-works/pi-coding-agent` | In-process, type-safe, native TS |
 | mrkdwn conversion | `slackify-markdown` | Battle-tested, Unified/Remark-based, handles edge cases |
 | Attach protocol | `ws` (WebSocket) | Bidirectional streaming, persistent connection |
 | Session persistence | Pi's JSONL via `SessionManager.open()` | Native format, tree structure, compaction support |

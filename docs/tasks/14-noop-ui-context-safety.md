@@ -15,7 +15,7 @@ The `noopUiContext` in `thread-session.ts` is a hand-crafted object with `as any
 1. Check if pi SDK exports a `createNoopUiContext()` helper — if so, use it
 2. If not, create a typed wrapper:
    ```ts
-   import type { ExtensionUIContext } from "@mariozechner/pi-coding-agent";
+   import type { ExtensionUIContext } from "@earendil-works/pi-coding-agent";
    
    function createSlackUiContext(overrides: Partial<ExtensionUIContext>): ExtensionUIContext {
      const base: ExtensionUIContext = { /* all methods as no-ops */ };

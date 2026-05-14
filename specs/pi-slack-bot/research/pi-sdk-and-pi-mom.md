@@ -1,6 +1,6 @@
 # pi SDK & pi-mom Research
 
-## pi SDK (`@mariozechner/pi-coding-agent`)
+## pi SDK (`@earendil-works/pi-coding-agent`)
 
 ### createAgentSession()
 
@@ -52,7 +52,7 @@ session.compact()
 
 The SDK does NOT have a built-in tool approval mechanism like AISlackBot's ACP protocol. Tools execute automatically. Tool approval would need to be implemented at the tool level — wrapping tools to pause execution and wait for Slack reactions before proceeding.
 
-## pi-mom (`@mariozechner/pi-mom`)
+## pi-mom (`@earendil-works/pi-mom`)
 
 ### Architecture
 

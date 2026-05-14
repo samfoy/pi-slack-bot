@@ -31,8 +31,8 @@
     "image": "https://raw.githubusercontent.com/samfoy/pi-slack-bot/main/assets/preview.jpg"
   },
   "dependencies": {
-    "@mariozechner/pi-ai": "^0.67.1",
-    "@mariozechner/pi-coding-agent": "^0.67.1",
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*",
     "@sinclair/typebox": "^0.34.49",
     "@slack/bolt": "^4.6.0",
     "@slack/types": "^2.20.1",

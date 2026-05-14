@@ -4,7 +4,7 @@
  * Provides human-readable formatting for token counts, context usage,
  * and visual progress bars for Slack display.
  */
-import type { ContextUsage } from "@mariozechner/pi-coding-agent";
+import type { ContextUsage } from "@earendil-works/pi-coding-agent";
 
 /**
  * Format a token count as a human-readable string.

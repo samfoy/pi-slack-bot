@@ -67,7 +67,7 @@ npm run audit       # No critical vulnerabilities
 
 ## Dependencies
 
-- `@mariozechner/pi-coding-agent` — the pi SDK (core agent)
+- `@earendil-works/pi-coding-agent` — the pi SDK (core agent)
 - `@slack/bolt` — Slack app framework (Socket Mode)
 - `ws` — WebSocket server for attach functionality
 - `slackify-markdown` — Markdown to Slack mrkdwn
